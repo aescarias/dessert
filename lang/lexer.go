@@ -7,6 +7,17 @@ import (
 	"strconv"
 )
 
+type Token struct {
+	Kind     TokenKind
+	Value    string
+	Position Position
+}
+
+type Position struct {
+	Start int
+	End   int
+}
+
 type TokenKind int
 
 const (
@@ -129,7 +140,7 @@ func (t TokenKind) String() string {
 	case TokenString:
 		return "String"
 	default:
-		return fmt.Sprint(int(t))
+		return fmt.Sprintf("TokenKind(%d)", t)
 	}
 }
 
@@ -222,17 +233,6 @@ func IsIdentifier(ch byte) bool {
 // An identifier may not start with a digit.
 func IsStartOfIdentifier(ch byte) bool {
 	return (IsASCIILetter(ch) || ch == '_') && !IsDecimalDigit(ch)
-}
-
-type Position struct {
-	Start int
-	End   int
-}
-
-type Token struct {
-	Kind     TokenKind
-	Value    string
-	Position Position
 }
 
 type Lexer struct {

@@ -45,9 +45,26 @@ func main() {
 			for _, tok := range lx.Tokens {
 				fmt.Printf("%s %q %d..%d\n", tok.Kind, tok.Value, tok.Position.Start, tok.Position.End)
 			}
+		case "ast":
+			lx := lang.NewLexer(contents)
+			if err := lx.Process(); err != nil {
+				lang.ReportError(filename, contents, err)
+				os.Exit(ExitFailure)
+			}
+
+			ps := lang.NewParser(lx.Tokens)
+			statements, err := ps.Parse()
+			if err != nil {
+				lang.ReportError(filename, contents, err)
+				os.Exit(ExitFailure)
+			}
+
+			for _, stmt := range statements {
+				ShowSyntaxTree(stmt, 0)
+			}
 		default:
 			fmt.Printf("unknown process %q\n", process)
-			fmt.Printf("processes: tokens")
+			fmt.Printf("processes: ast, tokens")
 			os.Exit(ExitUsage)
 		}
 

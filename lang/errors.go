@@ -51,7 +51,7 @@ func ReportError(filepath string, source []byte, err error) {
 		for idx, lineStr := range bytes.Split(bytes.TrimSuffix(source, []byte("\n")), []byte("\n")) {
 			if idx == line {
 				length := lerr.Position.End - lerr.Position.Start
-				fmt.Printf("in %s:%d:%d-%d\n", filepath, line+1, column+1, column+1+length)
+				fmt.Printf("in %s:%d:%d-%d\n", filepath, line+1, column, column+length)
 				fmt.Println(lerr)
 
 				trimmed := strings.TrimLeftFunc(string(lineStr), unicode.IsSpace)
