@@ -274,7 +274,7 @@ func (ps *Parser) ParseLiteral() (Node, error) {
 
 			if ps.matchesToken(TokenComma) {
 				ps.Advance(1)
-			} else if ps.matchesToken(TokenRBrace) {
+			} else if !ps.matchesToken(TokenRBrace) {
 				pos := Position{Start: value.Position().End, End: value.Position().End + 1}
 				return nil, LangError{ErrorSyntax, pos, "expected end or continuation of mapping"}
 			}

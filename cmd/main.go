@@ -62,6 +62,30 @@ func main() {
 			for _, stmt := range statements {
 				ShowSyntaxTree(stmt, 0)
 			}
+		case "eval":
+			lx := lang.NewLexer(contents)
+			if err := lx.Process(); err != nil {
+				lang.ReportError(filename, contents, err)
+				os.Exit(ExitFailure)
+			}
+
+			ps := lang.NewParser(lx.Tokens)
+			statements, err := ps.Parse()
+			if err != nil {
+				lang.ReportError(filename, contents, err)
+				os.Exit(ExitFailure)
+			}
+
+			eval := lang.Runtime{}
+			results, err := eval.Run(statements)
+			if err != nil {
+				lang.ReportError(filename, contents, err)
+				os.Exit(ExitFailure)
+			}
+
+			for _, result := range results {
+				fmt.Println(result)
+			}
 		default:
 			fmt.Printf("unknown process %q\n", process)
 			fmt.Printf("processes: ast, tokens")
