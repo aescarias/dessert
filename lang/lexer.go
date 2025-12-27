@@ -252,7 +252,7 @@ func (lx *Lexer) LexNumeric() Token {
 	type match func(ch byte) bool
 	var isDigit match
 
-	if digits[0] == '0' {
+	if digits[0] == '0' && !lx.IsDone() {
 		switch lx.Cursor() {
 		case 'b': // binary
 			isDigit = IsBinaryDigit
@@ -489,7 +489,7 @@ func (lx *Lexer) Process() error {
 				continue
 			case "*":
 				for !lx.IsDone() {
-					if !lx.CanPeek(2) {
+					if lx.Position+1 >= len(lx.Data) {
 						return LangError{
 							Kind:     ErrorSyntax,
 							Position: Position{Start: lx.Position, End: lx.Position + 1},
