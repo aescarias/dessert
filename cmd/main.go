@@ -84,7 +84,7 @@ func main() {
 			}
 
 			for _, result := range results {
-				fmt.Println(result)
+				fmt.Printf("%#v\n", result)
 			}
 		default:
 			fmt.Printf("unknown process %q\n", process)
