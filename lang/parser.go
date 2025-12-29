@@ -134,9 +134,14 @@ type MetaStmt struct {
 
 // A StructStmt represents a "struct" statement which declares a structure.
 type StructStmt struct {
-	Name   Token
-	Fields map[Node]Node
+	Name   Node
+	Fields []StructStmtMember
 	pos    Position
+}
+
+type StructStmtMember struct {
+	Name  Node
+	Value Node
 }
 
 func (es *ExprStmt) Type() NodeKind     { return StmtExpr }
@@ -550,7 +555,7 @@ func (ps *Parser) ParseStructStmt(start int) (Node, error) {
 
 		ps.Advance(1)
 
-		fields := map[Node]Node{}
+		fields := []StructStmtMember{}
 		for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
 			key, err := ps.ParseExpr()
 			if err != nil {
@@ -575,7 +580,7 @@ func (ps *Parser) ParseStructStmt(start int) (Node, error) {
 				return nil, LangError{ErrorSyntax, pos, "expected end or continuation of struct"}
 			}
 
-			fields[key] = value
+			fields = append(fields, StructStmtMember{key, value})
 		}
 
 		if ps.IsDone() {
@@ -598,7 +603,7 @@ func (ps *Parser) ParseStructStmt(start int) (Node, error) {
 		}
 		ps.Advance(1)
 
-		return &StructStmt{Name: ident.Token, Fields: fields, pos: Position{start, end}}, nil
+		return &StructStmt{Name: ident, Fields: fields, pos: Position{start, end}}, nil
 	} else {
 		return nil, LangError{
 			ErrorSyntax,

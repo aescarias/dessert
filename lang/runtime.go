@@ -5,9 +5,70 @@ import (
 	"math/big"
 )
 
+type TypeName string
+
+const (
+	// Unsigned Integer types
+
+	TpUint8  TypeName = "uint8"
+	TpUint16 TypeName = "uint16"
+	TpUint32 TypeName = "uint32"
+	TpUint64 TypeName = "uint64"
+
+	// Signed integer types
+
+	TpInt8  TypeName = "int8"
+	TpInt16 TypeName = "int16"
+	TpInt32 TypeName = "int32"
+	TpInt64 TypeName = "int64"
+
+	// Float types
+
+	TpFloat32 TypeName = "float32"
+	TpFloat64 TypeName = "float64"
+
+	// Other types
+
+	TpByte  TypeName = "byte"
+	TpArray TypeName = "array"
+	TpMatch TypeName = "match"
+)
+
+var AvailableTypes = []TypeName{
+	TpUint8,
+	TpUint16,
+	TpUint32,
+	TpUint64,
+	TpInt8,
+	TpInt16,
+	TpInt32,
+	TpInt64,
+	TpFloat32,
+	TpFloat64,
+	TpByte,
+	TpMatch,
+	TpArray,
+}
+
 type Runtime struct {
-	Environment map[Node]Node
+	Environment map[Result]Result
 	Metadata    Meta
+}
+
+func NewRuntime() Runtime {
+	runtime := Runtime{Environment: map[Result]Result{}}
+	runtime.addTypes()
+
+	return runtime
+}
+
+func (r *Runtime) addTypes() {
+	for _, typeName := range AvailableTypes {
+		r.Environment[IdentResult(typeName)] = TypeResult{
+			Name:   typeName,
+			Params: nil,
+		}
+	}
 }
 
 type Meta struct {
@@ -16,6 +77,8 @@ type Meta struct {
 	Extensions []string
 	Mime       []string
 	Docs       string
+	Endian     string
+	Root       IdentResult
 }
 
 func ParseMetadata(mapping MapResult) (*Meta, error) {
@@ -54,12 +117,28 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 		return nil, fmt.Errorf("meta: %w", err)
 	}
 
+	root, err := GetKeyByIdent[IdentResult](mapping, "root", true)
+	if err != nil {
+		return nil, fmt.Errorf("meta: %w", err)
+	}
+
+	endian, err := GetKeyByIdent[StringResult](mapping, "endian", true)
+	if err != nil {
+		return nil, fmt.Errorf("meta: %w", err)
+	}
+
+	if endian != "little" && endian != "big" {
+		return nil, fmt.Errorf("meta > endian: must be 'big' or 'little'")
+	}
+
 	return &Meta{
 		Dessert:    string(dessert),
 		Name:       string(name),
 		Extensions: extensions,
 		Mime:       mimeTypes,
 		Docs:       string(docs),
+		Endian:     string(endian),
+		Root:       root,
 	}, nil
 }
 
@@ -72,7 +151,9 @@ const (
 	ResMap        ResultKind = "Map"
 	ResIdentifier ResultKind = "Identifier"
 	ResList       ResultKind = "List"
+	ResType       ResultKind = "Type"
 	ResMeta       ResultKind = "Meta"
+	ResStruct     ResultKind = "Struct"
 )
 
 type Result interface {
@@ -85,8 +166,21 @@ type StringResult string
 type MapResult map[Result]Result
 type ListResult []Result
 type IdentResult string
+type TypeResult struct {
+	Name   TypeName
+	Params []Result
+}
 
 type MetaResult Meta
+type StructResult struct {
+	Name    Result
+	Members []StructMember
+}
+
+type StructMember struct {
+	Name  Result
+	Value Result
+}
 
 func (ir IntResult) Kind() ResultKind    { return ResInteger }
 func (fr FloatResult) Kind() ResultKind  { return ResFloat }
@@ -94,8 +188,10 @@ func (sr StringResult) Kind() ResultKind { return ResString }
 func (mr MapResult) Kind() ResultKind    { return ResMap }
 func (ir IdentResult) Kind() ResultKind  { return ResIdentifier }
 func (lr ListResult) Kind() ResultKind   { return ResList }
+func (tr TypeResult) Kind() ResultKind   { return ResType }
 
-func (mr MetaResult) Kind() ResultKind { return ResMeta }
+func (mr MetaResult) Kind() ResultKind   { return ResMeta }
+func (sr StructResult) Kind() ResultKind { return ResStruct }
 
 func ResultMustBe[T Result](result Result) (T, error) {
 	var empty T
@@ -327,6 +423,75 @@ func (r *Runtime) EvaluateUnaryOp(unary UnaryOpNode) (Result, error) {
 	}
 }
 
+func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
+	expr, err := r.EvaluateExpr(subscript.Expr)
+	if err != nil {
+		return nil, fmt.Errorf("while evaluating subscript expr: %w", err)
+	}
+
+	param, err := r.EvaluateExpr(subscript.Item)
+	if err != nil {
+		return nil, fmt.Errorf("while evaluating subscript item: %w", err)
+	}
+
+	switch res := expr.(type) {
+	case ListResult:
+		index, isInteger := param.(*IntResult)
+		if !isInteger {
+			return nil, fmt.Errorf("list index [%v] must be integer", param)
+		}
+
+		if idx := int(index.Int64()); idx > len(res) {
+			return nil, fmt.Errorf("list index [%d] is out of range (list length is %d)", index.Int64(), len(res))
+		} else {
+			return res[idx], nil
+		}
+	case MapResult:
+		if value, exists := res[param]; exists {
+			return value, nil
+		} else {
+			return nil, fmt.Errorf("mapping %v does not have key %v", res, param)
+		}
+	case IdentResult:
+		stored, ok := r.Environment[res]
+		if !ok {
+			// TODO: once proper identifier evaluation is added, this error will be changed.
+			return nil, fmt.Errorf("subscript in this context is only supported for types")
+		}
+
+		storedType, isType := stored.(TypeResult)
+		if !isType {
+			return nil, fmt.Errorf("subscript in this context is only supported for types")
+		}
+
+		switch storedType.Name {
+		case TpByte:
+			byteLen, isInteger := param.(IntResult)
+			if !isInteger {
+				return nil, fmt.Errorf("byte length [%v] must be integer", param)
+			}
+
+			return TypeResult{Name: TpByte, Params: []Result{byteLen}}, nil
+		case TpMatch:
+			matchStr, isStr := param.(StringResult)
+			if !isStr {
+				return nil, fmt.Errorf("match parameter [%v] must be string", param)
+			}
+
+			return TypeResult{Name: TpMatch, Params: []Result{matchStr}}, nil
+		default:
+			arrayLen, isInteger := param.(IntResult)
+			if !isInteger {
+				return nil, fmt.Errorf("array length [%v] must be integer", param)
+			}
+
+			return TypeResult{Name: TpArray, Params: []Result{storedType, arrayLen}}, nil
+		}
+	default:
+		return nil, fmt.Errorf("subscript is not supported for object of type %v", expr.Kind())
+	}
+}
+
 func (r *Runtime) EvaluateExpr(expr Node) (Result, error) {
 	switch expr.Type() {
 	case NodeBinOp:
@@ -339,6 +504,8 @@ func (r *Runtime) EvaluateExpr(expr Node) (Result, error) {
 		return r.EvaluateList(*expr.(*ListNode))
 	case NodeLiteral:
 		return r.EvaluateLiteral(*expr.(*LiteralNode))
+	case NodeSubscript:
+		return r.EvaluateSubscript(*expr.(*SubscriptNode))
 	default:
 		return nil, LangError{
 			ErrorRuntime,
@@ -367,12 +534,52 @@ func (r *Runtime) EvaluateMetaStmt(stmt MetaStmt) (Result, error) {
 	return MetaResult(r.Metadata), nil
 }
 
+func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
+	members := []StructMember{}
+
+	structName, err := r.EvaluateExpr(stmt.Name)
+	if err != nil {
+		return nil, fmt.Errorf("while parsing struct %v: %w", structName, err)
+	}
+
+	for _, field := range stmt.Fields {
+		fieldName, err := r.EvaluateExpr(field.Name)
+		if err != nil {
+			return nil, fmt.Errorf("%v > %v: %w", stmt.Name, fieldName, err)
+		}
+
+		fieldVal, err := r.EvaluateExpr(field.Value)
+		if err != nil {
+			return nil, fmt.Errorf("%v > %v: %w", stmt.Name, fieldName, err)
+		}
+
+		switch item := fieldVal.(type) {
+		case TypeResult:
+			members = append(members, StructMember{Name: fieldName, Value: item})
+		case StringResult:
+			members = append(members, StructMember{Name: fieldName, Value: TypeResult{Name: TpMatch, Params: []Result{item}}})
+		default: // for all our other types
+			typeRes, exists := r.Environment[item]
+			if !exists {
+				return nil, fmt.Errorf("%v > %v: %v is unsupported in this context", stmt.Name, fieldName, fieldVal)
+			}
+
+			members = append(members, StructMember{Name: fieldName, Value: typeRes})
+		}
+	}
+
+	r.Environment[structName] = StructResult{Name: structName, Members: members}
+	return r.Environment[structName], nil
+}
+
 func (r *Runtime) EvaluateStmt(stmt Node) (Result, error) {
 	switch stmt.Type() {
 	case StmtExpr:
 		return r.EvaluateExprStmt(*stmt.(*ExprStmt))
 	case StmtMeta:
 		return r.EvaluateMetaStmt(*stmt.(*MetaStmt))
+	case StmtStruct:
+		return r.EvaluateStructStmt(*stmt.(*StructStmt))
 	default:
 		return nil, LangError{
 			ErrorRuntime,

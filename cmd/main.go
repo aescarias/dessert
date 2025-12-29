@@ -76,7 +76,7 @@ func main() {
 				os.Exit(ExitFailure)
 			}
 
-			eval := lang.Runtime{}
+			eval := lang.NewRuntime()
 			results, err := eval.Run(statements)
 			if err != nil {
 				lang.ReportError(filename, contents, err)
@@ -88,10 +88,9 @@ func main() {
 			}
 		default:
 			fmt.Printf("unknown process %q\n", process)
-			fmt.Printf("processes: ast, tokens")
+			fmt.Printf("processes: ast, eval, tokens")
 			os.Exit(ExitUsage)
 		}
-
 	default:
 		fmt.Printf("unknown command %q\n", command)
 		fmt.Printf("commands: debug\n")
