@@ -1,0 +1,517 @@
+= The Dessert Language Specification
+Angel Carias <lotta.dev@outlook.com>
+v0.1, 2025-12-29
+:toc: auto
+:sectnums: |,all|
+
+== Overview
+
+Dessert (short for Deserialize/Serialize Transforms) is a domain-specific language (DSL) for describing data formats. It aims to be a simple language combining the power of regular expressions with the familiarity of standard data types to produce parsers for practically any format. 
+
+Dessert allows a developer implementing a data format to write a description of such format and produce a parser for a target programming language or documentation for the data format. Hence, Dessert acts as both a documentation tool and an implementation tool.
+
+Dessert is intended to be format-agnostic meaning that it should be capable of:
+
+- Describing a plaintext data format such as a datetime pattern, lines in a log file, a markup language, or a programming language.
+- Describing a binary data format such as a PNG file, a complete FAT filesystem, or formats delivered over-the-wire such as TCP.
+
+Dessert should provide the tools necessary to describe anything from basic sequential data to complex data that includes compression or bit-level access requirements without the boilerplate that is usually expected for these cases. Dessert should provide a standard library of common functions for math, data compression, encoding, and checksums.
+
+Dessert strives to combine tools commonly found in programming languages like C such as control flow, repetition, functions, and standard types, plus elements found in regular expressions such as character groups and greedy matches.
+
+== Notation
+
+A "data format" is a standardized structure that defines how data is organized, encoded, and interpreted. For simplicity, this document may also use the term "format".
+
+An application implementing this specification is referred to as a "Dessert runtime".
+
+A "Dessert document" is a document that follows the grammar defined in this specification and that is intended to be processed by a Dessert runtime. A Dessert document may also be referred to as a "definition". 
+
+== Lexical Elements
+
+=== Comments
+
+Comments serve as documentation within a definition. Comments have no syntactical meaning and shall be ignored by a Dessert runtime. Comments shall be interpreted as whitespace.
+
+Dessert supports two types of comments:
+
+- Line comments start with the sequence `//` and end with a newline character.
+- Block comments start with the sequence `/\*` and end with the sequence `*/`.
+
+[source,go]
+----
+data // Line comment
+some /* Block comment */ data
+----
+
+=== Tokens
+
+Tokens are individual units of a Dessert document that are produced and interpreted by the Dessert runtime. Tokens can be classified into identifiers, keywords, operators, and punctuation.
+
+Number literals and string literals are also considered tokens by the reference Dessert implementation. These literals are defined in <<Data types>>.
+
+==== Identifiers
+
+Identifiers refer to a particular entity such as a variable or type. Identifiers are conformed of a string of one or more alphanumeric characters consisting of the uppercase letters A through Z, the lowercase letters a through z, the digits 0 through 9, and the underscore character `_`. An identifier must include at least one character. An identifier may not start with a digit. An identifier cannot contain whitespace.
+
+[source,go]
+----
+identifier := letter (letter | digit)*
+
+letter := "A"-"Z" | "a"-"z" | "_"
+digit  := "0"-"9"
+----
+
+==== Keywords
+
+Keywords are special identifiers reserved by the Dessert runtime for usage in syntactical constructs. Keywords cannot be used as identifier names.
+
+Dessert defines the following keywords:
+
+[source,text]
+----
+true    false    struct    enum      pattern    import  
+meta    let      const     if        else       switch  
+for     while    func      return
+----
+
+==== Operators and punctuation
+
+Operators are tokens that apply an operator to either one or two values called operands. Tokens used in conjunction with other constructs, usually as delimiters, are called punctuation.
+
+Dessert defines the following character sequences as operators:
+
+[source,go]
+----
+* ** / + - == = < > <= >= | & ~ ^ >> << % ! != && ||
+----
+
+The following character sequences are defined as punctuation:
+
+[source,go]
+----
+( ) { } [ ] , : ; . ?
+----
+
+The meaning and use of operators and punctuations is described in <<Operators>> and <<Statements>> respectively.
+
+== Data types
+
+Dessert defines the following data types:
+
+- Integers
+- Floats
+- Booleans
+- Strings
+- Lists
+- Mappings
+
+An element or object whose value is of a particular type is referred to as a literal.
+
+[source,go]
+----
+literal := integer | float | boolean | string | list | mapping
+----
+
+=== Integers
+
+Integers represent whole quantities. An integer consists in essence of a sequence of one or more digits.
+
+Integers may also start with a sign bit (that is, either `+` or `-`) as part of a unary operation. Unary operations are described in <<Unary Operators>>.
+
+Integer literals may also include an underscore `_` anywhere after the first digit or after the base prefix for readability purposes. The integer literal `1_000_000` is equivalent to the the literal `1000000`. `_30` is not an integer literal, but rather an identifier.
+
+Integer literals can also be written in a different base using a base prefix. The prefix defines the base to interpret the literal in. The prefix bases available are `0b` for binary, `0o` for octal, and `0x` for hexadecimal. No prefix implies base 10 or decimal.
+
+The following are valid integer literals.
+
+[source,go]
+----
+100       021      3_410     -20    +42
+0b1011    0o777    0xcafe      
+----
+
+[source,go]
+----
+integer         := decimal_literal | binary_literal | octal_literal | hex_literal
+
+decimal_literal := decimal_digit (decimal_digit | "_")*
+decimal_digit   := "0".."9"
+
+binary_literal  := "0b" (binary_digit | "_")+
+binary_digit    := "0".."1"
+
+octal_literal   := "0o" (octal_digit | "_")+
+octal_digit     := "0".."7"
+
+hex_literal     := "0x" (hex_digit | "_")+
+hex_digit       := "0".."9" | "A".."F" | "a".."f"
+----
+
+=== Floats
+
+Floating-point numbers, or floats, represent real numbers or continuous quantities. An floating-point number consists in essence of a sequence of one or more digits with a period (`.`) separating the integer part and the fractional part. 
+
+A floating-point number may omit the integer part (`.30`); in which case, it will be assumed to be zero. This also applies to the fractional part (`42.`). A single period `.` is not a valid floating-point number literal.
+
+As with integer literals, floating-point numbers may also include underscores to aid readability, occurring anywhere after the first digit.
+
+The following are valid floating-point number literals.
+
+[source,go]
+----
+100.00    010.00    3.1415    .100    100.    123_456.789    +42.10    -10.42
+----
+
+[source,go]
+----
+float := decimal_literal "." decimal_literal |
+         decimal_literal "." |
+         "." decimal_literal
+
+// defined earlier
+decimal_literal := decimal_digit (decimal_digit | "_")*
+decimal_digit   := "0".."9"
+----
+
+=== Booleans
+
+Booleans represent truth values and are denoted by the constants `true` and `false`. 
+
+[source,go]
+----
+true    false
+----
+
+[source,go]
+----
+boolean := "true" | "false"
+----
+
+=== Strings
+
+Strings are sequences of zero or more bytes enclosed in either single quotes (`'`) or double quotes (`"`). A string must start and end with the same quote, so an expression `"abc'` would not produce a valid string.
+
+A string may also include special characters by using escape sequences. A escape sequence starts with a `\` and must be either of the following.
+
+- `\\` inserts a backslash (`\`).
+- `\'` inserts a single quote (`'`).
+- `\"` inserts a double quote (`"`).
+- `\n` inserts a newline.
+- `\r` inserts a carriage return.
+- `\t` inserts a horizontal tab.
+- `\xhh` inserts a character with the hexadecimal code `hh`.
+- `\ooo` inserts a character with the octal code `ooo`.
+
+Using an unrecognized escape sequence is not allowed.
+
+The following are examples of valid strings:
+
+[source,javascript]
+----
+'Hello, world!'
+"I'm a string!"
+"This is a palm tree: 🌴"
+"I'm a string\nwith a newline!"
+----
+
+[source,go]
+----
+string    := '"' character* '"' |
+             "'" character* "'"
+
+character := "\x00".."\xff" | escape_sequence;
+
+escape_sequence  := escaped_char | hex_byte_value | octal_byte_value
+escaped_char     := "\\" ("\\" | "'" | '"' | "n" | "r" | "t")
+hex_byte_value   := "\\" "x" hex_digit[2]
+octal_byte_value := "\\" octal_digit[3]
+
+// defined earlier
+octal_digit     := "0".."7"
+hex_digit       := "0".."9" | "A".."F" | "a".."f"
+----
+
+=== Lists
+
+Lists are ordered collections of zero or more literals called elements. A list may contain elements of any data type. A list is enclosed in brackets (`[]`) and each element is separated by a comma (`,`).
+
+The following are examples of valid lists:
+
+[source,go]
+----
+[1, 2, 3]
+["a", "b", "c"]
+[]
+[["a", "b"], ["c", "d"]]
+----
+
+[source,go]
+----
+list     := "[" elements? "]"
+elements := literal ("," literal)*;
+
+// defined earlier
+literal  := integer | float | boolean | string | list | mapping
+----
+
+=== Mappings
+
+Mappings are ordered collections of one or more key-value pairs. The keys and values may be of any valid data type. A mapping is enclosed in braces (`{}`). Its elements, the key-value pairs, are separated by a comma (`,`). The key and value are themselves separated by a colon (`:`).
+
+The following are examples of valid mappings:
+
+[source,go]
+----
+{}
+{"foo": "bar", "baz": "qux"}
+{"x": 10, "y": 20}
+{"point": [10, 20, 0]}
+----
+
+[source,go]
+----
+mapping  := "{" kv_pairs? "}"
+
+kv_pairs := kv_pair ("," kv_pair)*
+kv_pair  := literal ":" literal
+
+// defined earlier
+literal  := integer | float | boolean | string | list | mapping
+----
+
+== Expressions
+
+Expressions are the result of applying operators or functions to operands. An operand can either be a literal or an identifier that, when evaluated, resolves to a literal.
+
+The operations that can conform an expression are unary operators and binary operators, defined in <<Operators>>, and literals.
+
+An expression can also be enclosed in parentheses (`()`), either for readability or for increased operator precedence.
+
+[source,go]
+----
+expr     := unary_op | binary_op | literal | grouping
+grouping := "(" expr ")"
+---- 
+
+=== Operators
+
+Dessert defines the following operators, grouped into two categories:
+
+- Unary operators apply an operation on a single element called its operand.
+- Binary operators apply an operation on two elements or operands.
+
+==== Unary Operators
+
+A unary operation applies an operation on a single element or operand.
+
+The following unary operators are available:
+
+- Unary minus (`-num`) negates the numeric value following it.
+
+- Unary plus (`+num`) is the same as `num` but is provided for completeness.
+
+- Unary tilde (`~int`) applies the bitwise complement on integer `ìnt`, that is, inverts each bit of the integer.
+
+[source,go]
+----
+unary_op := ("-" | "+" | "~") expr;
+----
+
+==== Binary Operators
+
+A binary operation applies an operation on two elements or operands.
+
+The following binary operators are defined and grouped as follows:
+
+- Arithmetic operators
++
+    - Addition (+)
+    - Subtraction (-)
+    - Multiplication (*)
+    - Division (/)
+
+[source,go]
+----
+binary_op := arithmetic_op
+
+arithmetic_op := expr ("+" | "-" | "*" | "/") expr
+----
+
+===== Arithmetic operators
+
+Arithmetic operators apply to numeric values and evaluate to a numeric value depending on the operands. The addition operator may also apply to strings. The bitwise operators are only applicable to integers.
+
+For all arithmetic operators where both operands are numbers, except division, the resulting type is a float if either of the operands is also a float; otherwise, the resulting type is an integer. For division and remainder, the result will be an integer if the result of the operation can be represented as a whole number; otherwise, the result will be a float.
+
+The addition operator `+` adds two numbers `a` and `b`. 
+
+[source,go]
+----
+1 + 2    // 3
+-4 + 2   // 2
+1.3 + 4  // 5.3 
+----
+
+The addition operator also acts as the string concatenation operator. For two strings `a` and `b`, the resulting type is a string of `a` plus `b`.
+
+[source,go]
+----
+"foo" + "bar" // "foobar"
+"foo" + ""    // "foo"
+----
+
+The subtraction operator subtracts two numbers `a` and `b`.
+
+[source,go]
+----
+1 - 2     // -1
+4 - (-2)  // 6
+42 - 1.4  // 40.6 
+----
+
+The multiplication operator returns the product of numbers `a` and `b`.
+
+[source,go]
+----
+3 * 2   // 6
+3 * -2  // -6
+1.2 * 4 // 4.8
+----
+
+The division operator `/` returns the quotient of numbers `a` and `b` given that `b != 0`. A division where `b == 0` is undefined and shall raise a domain error.
+
+[source,go]
+----
+3 / 2    // 1.5
+10 / 5   // 2
+-4 / 2   // -2
+10.7 / 4 // 2.675
+3 / 0    // error: division by zero
+----
+
+=== Operator Precedence
+
+From most to least precedence:
+
+- Groupings (`(expr)`) and literals
+- Unary plus (`+x`), unary minus (`-x`), unary bitwise complement (`~x`).
+- Multiplication (`*`) and division (`/`)
+- Addition (`+`) and subtraction (`-`)
+
+== Statements
+
+Statements are blocks that perform a particular action.
+
+Dessert currently has three types of statements:
+
+- `meta` statements.
+- `struct` statements.
+- Expression statements.
+
+[source,go]
+----
+statement := meta_stmt | struct_stmt | expr_stmt
+----
+
+=== "meta" statement
+
+A meta statement defines metadata for the format being described. A Dessert document must include one `meta` statement. `meta` statements are usually the first statement of a Dessert document. No more than one `meta` statement should appear in a document.
+
+[source,go]
+----
+meta_stmt := "meta" mapping ";"; 
+----
+
+The "meta" statement consists in order of the keyword `meta`, a mapping, and the statement terminator `;`. The mapping inside a meta statement is referred to as the metadata mapping.
+
+The keys the metadata mapping may contain are:
+
+[cols="1,1,3"]
+|===
+|Name |Type |Description
+
+|dessert
+|string
+|(required) The minimum version that a Dessert runtime must support to be able to parse this document.
+
+|name
+|string
+|(required) The name of the format being described. This is usually the formal name of the format, e.g. "Portable Document Format".
+
+|mime
+|list of strings
+|(optional) The media types (formerly known as MIME types) assigned to the described format. If multiple media types are in common use for one particular format, the media types should be listed in descending order of preference.
+
+|exts
+|list of strings
+|(optional) The file extensions commonly used for this format. This field is useful for formats intended to be written to disk. If multiple extensions for one particular format are in common use, the extensions should be listed in descending order of preference. The extensions should include the leading period, e.g. `.bmp`
+
+|docs
+|string
+|(optional) Details about the described format. The information that goes here is up to the author, but generally, it should describe the format's purpose and usage, creator(s), and basic structure, and contain links to technical references or
+specifications.
+
+|endian
+|string
+|(required) The byte endianness of the format being described. This must either be the string "little" or the string "big", meaning little-endian byte order and big-endian or network byte order, respectively.
+
+|root
+|identifier
+|(required) The root structure from which to start parsing input data. This must be an identifier referring to a structure.
+|===
+
+=== Struct statements
+
+The `struct` statements defines a structure, an ordered sequence of named elements called fields. Each struct field has a name and a type.
+
+[source,go]
+----
+struct_stmt := "struct" identifier "{" fields* "}"
+fields      := field ("," field)*
+field       := identifier ":" type_name
+----
+
+The type name is an identifier referring to one of the following data types: 
+
+- The unsigned integer types `uint8`, `uint16`, `uint24`, `uint32`, and `uint64`.
+- The signed integer types `int8`, `int16`, `int24`, `int32`, and `int64`.
+- The floating point types `float32` and `float64`.
+- The `byte[n]` type.
+- The `match` type.
+
+[source,go]
+----
+type_name := unsigned_int_name | signed_int_name | float_name | byte_name |
+             array_name | match_name
+
+unsigned_int_name := "uint8" | "uint16" | "uint24" | "uint32" | "uint64"
+signed_int_name   := "int8" | "int16" | "int24" | "int32" | "int64"
+float_name        := "float32" | "float64"
+byte_name         := "byte" "[" integer "]"
+array_name        := (unsigned_int_name | signed_int_name | float_name) "[" integer "]"
+match_name        := "match" "[" string "]" | string
+----
+
+=== Expression statements
+
+An expression statement is a statement consisting of a single expression. It is the simplest kind of statement.
+
+[source,go]
+----
+expr_stmt := expr ";"
+----
+
+== Versioning
+
+Dessert versions follow the `X.Y` format where `X` is the major version and `Y` is the minor version. 
+
+The **major version** is incremented by 1 when a _breaking change_ occurs, that is, a change that may break compatibility with a Dessert runtime supporting an older major version. For example, new syntax would constitute a major version increase.  
+
+The **minor version** is incremented by 1 when a _backwards compatible change_ occurs, that is, a change that does not affect compatibility with a Dessert runtime supporting the same major version but an older minor version. Minor versions are usually small revisions and patches, deprecations, or new features that don't introduce new syntax.
+
+A special exception to this is when the major version is zero; in such case, the minor version should be treated as the major version. No compatibility guarantees are made between `0.X` releases.
+
+When the major version is incremented, the minor version resets to 0. 
+
+When a Dessert runtime encounters a document specifying a greater major version than it can process, it shall raise an error. When a Dessert runtime encounters a document specifying a greater minor version than it expects, it shall continue parsing the document but may raise a warning if appropriate.
