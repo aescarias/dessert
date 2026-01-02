@@ -74,9 +74,18 @@ func ShowSyntaxTree(node lang.Node, indent int) {
 		structStmt := node.(*lang.StructStmt)
 		fmt.Printf("%s> %s (%s)\n", tabbed, structStmt.Type(), structStmt.Name)
 
+		fmt.Printf("%s- fields (%d)\n", tabbed, len(structStmt.Fields))
 		for _, field := range structStmt.Fields {
-			ShowSyntaxTree(field.Name, indent+1)
-			ShowSyntaxTree(field.Value, indent+2)
+			ShowSyntaxTree(field.Name, indent+2)
+			ShowSyntaxTree(field.Value, indent+3)
+		}
+
+		fmt.Printf("%s- modifiers (%d)\n", tabbed, len(structStmt.Modifiers))
+		for key, value := range structStmt.Modifiers {
+			ShowSyntaxTree(key, indent+2)
+			if value != nil {
+				ShowSyntaxTree(value, indent+3)
+			}
 		}
 	case lang.StmtExpr:
 		exprStmt := node.(*lang.ExprStmt)

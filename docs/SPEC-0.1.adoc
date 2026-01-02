@@ -1,6 +1,6 @@
 = The Dessert Language Specification
 Angel Carias <lotta.dev@outlook.com>
-v0.1, 2025-12-29
+v0.1, 2026-01-02
 :toc: auto
 :sectnums: |,all|
 
@@ -90,7 +90,7 @@ The following character sequences are defined as punctuation:
 
 [source,go]
 ----
-( ) { } [ ] , : ; . ?
+( ) { } [ ] , : ; . ? @
 ----
 
 The meaning and use of operators and punctuations is described in <<Operators>> and <<Statements>> respectively.
@@ -463,11 +463,11 @@ specifications.
 
 === Struct statements
 
-The `struct` statements defines a structure, an ordered sequence of named elements called fields. Each struct field has a name and a type.
+The `struct` statement defines a structure, an ordered sequence of named elements called fields. Each struct field has a name and a type.
 
 [source,go]
 ----
-struct_stmt := "struct" identifier "{" fields* "}"
+struct_stmt := modifier_list? "struct" identifier "{" fields? "}"
 fields      := field ("," field)*
 field       := identifier ":" type_name
 ----
@@ -490,8 +490,10 @@ signed_int_name   := "int8" | "int16" | "int24" | "int32" | "int64"
 float_name        := "float32" | "float64"
 byte_name         := "byte" "[" integer "]"
 array_name        := (unsigned_int_name | signed_int_name | float_name) "[" integer "]"
-match_name        := "match" "[" string "]" | string
+match_name        := ("match" "[" string "]") | string
 ----
+
+Struct statements can be affected by <<Statement modifiers>>. The only available modifier is the `endian` field which if specified must be either the string `"little"` or the string `"big"`. This modifier controls the byte endianness of all integer fields contained in the struct. If the field is not specified, the endianness should be the same as the endianness of the parent structure.
 
 === Expression statements
 
@@ -500,6 +502,34 @@ An expression statement is a statement consisting of a single expression. It is 
 [source,go]
 ----
 expr_stmt := expr ";"
+----
+
+=== Statement modifiers
+
+Some statements support *statement modifiers* which describe a set of modifiers that can influence the behavior of the statement. <<Struct statements>> are currently the only type of statement supporting modifiers.
+
+Statement modifiers occur before the start of the statement. A statement modifier list is comprised of the token `@` followed by parentheses enclosing any amount of modifiers separated by comma.
+
+A modifier follows the form `name: value` where `name` is an identifier and `value` is a literal produced from any valid expression.
+
+For modifiers with a boolean value, the `: value` part may be omitted; in which case, the modifier value will be implicitly `true`.
+
+The following are example of valid property lists.
+
+[source,go]
+----
+@()
+@(x, y, z)                 // same as @(x: true, y: true, z: true)
+@(foo: "bar", baz)         // same as @(foo: "bar", baz: true)
+@(a: "b", c: "d", e: "f")
+----
+
+[source,go]
+----
+modifier_list := "@" "(" modifiers? ")"
+
+modifiers     := modifier ("," modifier)*
+modifier      := (identifier) | (identifier ":" expr) 
 ----
 
 == Versioning

@@ -54,6 +54,7 @@ const (
 	TokenLogicalAnd                    // &&
 	TokenLogicalOr                     // ||
 	TokenQuestion                      // ?
+	TokenAt                            // @
 	TokenIdentifier
 	TokenKeyword
 	TokenInteger
@@ -129,6 +130,8 @@ func (t TokenKind) String() string {
 		return "LogicalOr"
 	case TokenQuestion:
 		return "Question"
+	case TokenAt:
+		return "At"
 	case TokenIdentifier:
 		return "Identifier"
 	case TokenKeyword:
@@ -182,6 +185,35 @@ var AvailableKeywords = []KeywordKind{
 	KeywordWhile,
 	KeywordFunc,
 	KeywordReturn,
+}
+
+var escapeMap = map[byte]byte{
+	'\\': '\\',
+	'\'': '\'',
+	'"':  '"',
+	'n':  '\n',
+	'r':  '\r',
+	't':  '\t',
+}
+
+var singleTokenMap = map[byte]TokenKind{
+	'(': TokenLParen,
+	')': TokenRParen,
+	'{': TokenLBrace,
+	'}': TokenRBrace,
+	'[': TokenLBracket,
+	']': TokenRBracket,
+	',': TokenComma,
+	':': TokenColon,
+	';': TokenSemicolon,
+	'?': TokenQuestion,
+	'.': TokenDot,
+	'+': TokenPlus,
+	'-': TokenMinus,
+	'%': TokenRemainder,
+	'^': TokenBitwiseXor,
+	'~': TokenBitwiseNot,
+	'@': TokenAt,
 }
 
 // IsASCIILetter reports whether a character ch is an ASCII letter, i.e. a character
@@ -309,15 +341,6 @@ func (lx *Lexer) LexIdentifier() Token {
 	}
 }
 
-var escapeMap = map[byte]byte{
-	'\\': '\\',
-	'\'': '\'',
-	'"':  '"',
-	'n':  '\n',
-	'r':  '\r',
-	't':  '\t',
-}
-
 func (lx *Lexer) LexString(delimiter byte) (Token, error) {
 	start := lx.Position
 
@@ -402,25 +425,6 @@ func (lx *Lexer) LexString(delimiter byte) (Token, error) {
 		Value:    string(strSeq),
 		Position: Position{start, lx.Position},
 	}, nil
-}
-
-var singleTokenMap = map[byte]TokenKind{
-	'(': TokenLParen,
-	')': TokenRParen,
-	'{': TokenLBrace,
-	'}': TokenRBrace,
-	'[': TokenLBracket,
-	']': TokenRBracket,
-	',': TokenComma,
-	':': TokenColon,
-	';': TokenSemicolon,
-	'?': TokenQuestion,
-	'.': TokenDot,
-	'+': TokenPlus,
-	'-': TokenMinus,
-	'%': TokenRemainder,
-	'^': TokenBitwiseXor,
-	'~': TokenBitwiseNot,
 }
 
 func (lx *Lexer) addToken(kind TokenKind, value string) {

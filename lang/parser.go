@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -134,9 +135,10 @@ type MetaStmt struct {
 
 // A StructStmt represents a "struct" statement which declares a structure.
 type StructStmt struct {
-	Name   Node
-	Fields []StructStmtMember
-	pos    Position
+	Name      Node
+	Modifiers map[Node]Node
+	Fields    []StructStmtMember
+	pos       Position
 }
 
 type StructStmtMember struct {
@@ -216,6 +218,60 @@ func (ps *Parser) tryPostfix(left Node) (Node, error) {
 	}
 
 	return left, nil
+}
+
+var ErrNotModifiers = fmt.Errorf("not the start of a statement modifier list")
+
+func (ps *Parser) ParseModifierList() (map[Node]Node, error) {
+	if !ps.matchesToken(TokenAt) {
+		return nil, ErrNotModifiers
+	}
+
+	start := ps.Cursor().Position.Start
+	ps.Advance(1)
+
+	if !ps.matchesToken(TokenLParen) {
+		return nil, LangError{ErrorSyntax, Position{Start: start, End: start + 1}, "expected start of modifier list"}
+	}
+	ps.Advance(1)
+
+	modifiers := map[Node]Node{}
+	for !ps.IsDone() && ps.Cursor().Kind != TokenRParen {
+		key, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		var value Node
+		if ps.matchesToken(TokenColon) {
+			ps.Advance(1)
+
+			var err error
+			value, err = ps.ParseExpr()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			value = nil
+		}
+
+		if ps.matchesToken(TokenComma) {
+			ps.Advance(1)
+		} else if !ps.matchesToken(TokenRParen) {
+			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of modifier list"}
+		}
+
+		modifiers[key] = value
+	}
+
+	if ps.IsDone() {
+		return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing paren"}
+	}
+
+	ps.Advance(1)
+
+	return modifiers, nil
 }
 
 func (ps *Parser) ParseLiteral() (Node, error) {
@@ -530,7 +586,7 @@ func (ps *Parser) ParseMetaStmt(start int) (Node, error) {
 	}
 }
 
-func (ps *Parser) ParseStructStmt(start int) (Node, error) {
+func (ps *Parser) ParseStructStmt(start int, modifiers map[Node]Node) (Node, error) {
 	lit, err := ps.ParseLiteral()
 	if err != nil {
 		return nil, err
@@ -603,7 +659,7 @@ func (ps *Parser) ParseStructStmt(start int) (Node, error) {
 		}
 		ps.Advance(1)
 
-		return &StructStmt{Name: ident, Fields: fields, pos: Position{start, end}}, nil
+		return &StructStmt{Name: ident, Modifiers: modifiers, Fields: fields, pos: Position{start, end}}, nil
 	} else {
 		return nil, LangError{
 			ErrorSyntax,
@@ -636,17 +692,24 @@ func (ps *Parser) ParseExprStmt() (Node, error) {
 }
 
 func (ps *Parser) ParseStmt() (Node, error) {
+	start := ps.Cursor().Position.Start
+
+	modifiers, err := ps.ParseModifierList()
+	if errors.Is(err, ErrNotModifiers) {
+		modifiers = nil
+	} else if err != nil {
+		return nil, err
+	}
+
 	switch ps.Cursor().Kind {
 	case TokenKeyword:
-		start := ps.Cursor().Position.Start
-
 		switch kw := KeywordKind(ps.Cursor().Value); kw {
 		case KeywordMeta:
 			ps.Advance(1)
 			return ps.ParseMetaStmt(start)
 		case KeywordStruct:
 			ps.Advance(1)
-			return ps.ParseStructStmt(start)
+			return ps.ParseStructStmt(start, modifiers)
 		default:
 			return nil, LangError{
 				ErrorSyntax,
