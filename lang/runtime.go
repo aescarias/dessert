@@ -51,12 +51,12 @@ var AvailableTypes = []TypeName{
 }
 
 type Runtime struct {
-	Environment map[Result]Result
+	Environment map[string]Result
 	Metadata    Meta
 }
 
 func NewRuntime() Runtime {
-	runtime := Runtime{Environment: map[Result]Result{}}
+	runtime := Runtime{Environment: map[string]Result{}}
 	runtime.addTypes()
 
 	return runtime
@@ -64,7 +64,7 @@ func NewRuntime() Runtime {
 
 func (r *Runtime) addTypes() {
 	for _, typeName := range AvailableTypes {
-		r.Environment[IdentResult(typeName)] = TypeResult{
+		r.Environment[string(typeName)] = TypeResult{
 			Name:   typeName,
 			Params: nil,
 		}
@@ -79,18 +79,18 @@ type Meta struct {
 	Docs       string
 }
 
-func ParseMetadata(mapping MapResult) (*Meta, error) {
-	dessert, err := GetKeyByIdent[StringResult](mapping, "dessert", true)
+func ParseMetadata(meta map[string]Result) (*Meta, error) {
+	dessert, err := GetMapKey[StringResult](meta, "dessert", true)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %s", err)
 	}
 
-	name, err := GetKeyByIdent[StringResult](mapping, "name", true)
+	name, err := GetMapKey[StringResult](meta, "name", true)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %s", err)
 	}
 
-	exts, err := GetKeyByIdent[ListResult](mapping, "exts", false)
+	exts, err := GetMapKey[ListResult](meta, "exts", false)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %s", err)
 	}
@@ -100,7 +100,7 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 		return nil, fmt.Errorf("meta > exts[%d]: %w", errIdx, err)
 	}
 
-	mimes, err := GetKeyByIdent[ListResult](mapping, "mime", false)
+	mimes, err := GetMapKey[ListResult](meta, "mime", false)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %s", err)
 	}
@@ -110,7 +110,7 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 		return nil, fmt.Errorf("meta > mime[%d]: %w", errIdx, err)
 	}
 
-	docs, err := GetKeyByIdent[StringResult](mapping, "docs", false)
+	docs, err := GetMapKey[StringResult](meta, "docs", false)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %w", err)
 	}
@@ -127,15 +127,14 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 type ResultKind string
 
 const (
-	ResInteger    ResultKind = "Integer"
-	ResFloat      ResultKind = "Float"
-	ResString     ResultKind = "String"
-	ResMap        ResultKind = "Map"
-	ResIdentifier ResultKind = "Identifier"
-	ResList       ResultKind = "List"
-	ResType       ResultKind = "Type"
-	ResMeta       ResultKind = "Meta"
-	ResStruct     ResultKind = "Struct"
+	ResInteger ResultKind = "Integer"
+	ResFloat   ResultKind = "Float"
+	ResString  ResultKind = "String"
+	ResMap     ResultKind = "Map"
+	ResList    ResultKind = "List"
+	ResType    ResultKind = "Type"
+	ResMeta    ResultKind = "Meta"
+	ResStruct  ResultKind = "Struct"
 )
 
 type Result interface {
@@ -147,7 +146,6 @@ type FloatResult struct{ *big.Float }
 type StringResult string
 type MapResult map[Result]Result
 type ListResult []Result
-type IdentResult string
 type TypeResult struct {
 	Name   TypeName
 	Params []Result
@@ -155,12 +153,12 @@ type TypeResult struct {
 
 type MetaResult Meta
 type StructResult struct {
-	Name    Result
+	Name    string
 	Members []StructMember
 }
 
 type StructMember struct {
-	Name  Result
+	Name  string
 	Value Result
 }
 
@@ -168,7 +166,6 @@ func (ir IntResult) Kind() ResultKind    { return ResInteger }
 func (fr FloatResult) Kind() ResultKind  { return ResFloat }
 func (sr StringResult) Kind() ResultKind { return ResString }
 func (mr MapResult) Kind() ResultKind    { return ResMap }
-func (ir IdentResult) Kind() ResultKind  { return ResIdentifier }
 func (lr ListResult) Kind() ResultKind   { return ResList }
 func (tr TypeResult) Kind() ResultKind   { return ResType }
 
@@ -199,10 +196,10 @@ func ToStringList(list ListResult) (items []string, err error, errIndex int) {
 	return items, nil, -1
 }
 
-func GetKeyByIdent[T Result](mapping MapResult, name string, required bool) (T, error) {
+func GetMapKey[T Result](mapping map[string]Result, name string, required bool) (T, error) {
 	var empty T
 
-	valueRes, exists := mapping[IdentResult(name)]
+	valueRes, exists := mapping[name]
 	if !exists && required {
 		return empty, fmt.Errorf("required key %q does not exist", name)
 	} else if !exists {
@@ -326,7 +323,15 @@ func (r *Runtime) EvaluateLiteral(lit LiteralNode) (Result, error) {
 	case TokenString:
 		return StringResult(tok.Value), nil
 	case TokenIdentifier:
-		return IdentResult(tok.Value), nil
+		if value, ok := r.Environment[tok.Value]; ok {
+			return value, nil
+		} else {
+			return nil, LangError{
+				ErrorAccess,
+				tok.Position,
+				fmt.Sprintf("%q is not defined", tok.Value),
+			}
+		}
 	default:
 		return nil, LangError{
 			ErrorSyntax,
@@ -434,19 +439,8 @@ func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
 		} else {
 			return nil, fmt.Errorf("mapping %v does not have key %v", res, param)
 		}
-	case IdentResult:
-		stored, ok := r.Environment[res]
-		if !ok {
-			// TODO: once proper identifier evaluation is added, this error will be changed.
-			return nil, fmt.Errorf("subscript in this context is only supported for types")
-		}
-
-		storedType, isType := stored.(TypeResult)
-		if !isType {
-			return nil, fmt.Errorf("subscript in this context is only supported for types")
-		}
-
-		switch storedType.Name {
+	case TypeResult:
+		switch res.Name {
 		case TpByte:
 			byteLen, isInteger := param.(IntResult)
 			if !isInteger {
@@ -467,7 +461,7 @@ func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
 				return nil, fmt.Errorf("array length [%v] must be integer", param)
 			}
 
-			return TypeResult{Name: TpArray, Params: []Result{storedType, arrayLen}}, nil
+			return TypeResult{Name: TpArray, Params: []Result{res, arrayLen}}, nil
 		}
 	default:
 		return nil, fmt.Errorf("subscript is not supported for object of type %v", expr.Kind())
@@ -502,13 +496,8 @@ func (r *Runtime) EvaluateExprStmt(stmt ExprStmt) (Result, error) {
 }
 
 func (r *Runtime) EvaluateMetaStmt(stmt MetaStmt) (Result, error) {
-	metaMap := MapResult{}
-	for keyNode, valueNode := range stmt.Metadata {
-		key, err := r.EvaluateExpr(keyNode)
-		if err != nil {
-			return nil, err
-		}
-
+	metaMap := map[string]Result{}
+	for key, valueNode := range stmt.Metadata {
 		value, err := r.EvaluateExpr(valueNode)
 		if err != nil {
 			return nil, err
@@ -528,39 +517,24 @@ func (r *Runtime) EvaluateMetaStmt(stmt MetaStmt) (Result, error) {
 func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 	members := []StructMember{}
 
-	structName, err := r.EvaluateExpr(stmt.Name)
-	if err != nil {
-		return nil, fmt.Errorf("while parsing struct %v: %w", structName, err)
-	}
-
 	for _, field := range stmt.Fields {
-		fieldName, err := r.EvaluateExpr(field.Name)
-		if err != nil {
-			return nil, fmt.Errorf("%v > %v: %w", stmt.Name, fieldName, err)
-		}
-
 		fieldVal, err := r.EvaluateExpr(field.Value)
 		if err != nil {
-			return nil, fmt.Errorf("%v > %v: %w", stmt.Name, fieldName, err)
+			return nil, fmt.Errorf("%v > %s: %w", stmt.Name, field.Name, err)
 		}
 
 		switch item := fieldVal.(type) {
 		case TypeResult:
-			members = append(members, StructMember{Name: fieldName, Value: item})
+			members = append(members, StructMember{Name: field.Name, Value: item})
 		case StringResult:
-			members = append(members, StructMember{Name: fieldName, Value: TypeResult{Name: TpMatch, Params: []Result{item}}})
+			members = append(members, StructMember{Name: field.Name, Value: TypeResult{Name: TpMatch, Params: []Result{item}}})
 		default: // for all our other types
-			typeRes, exists := r.Environment[item]
-			if !exists {
-				return nil, fmt.Errorf("%v > %v: %v is unsupported in this context", stmt.Name, fieldName, fieldVal)
-			}
-
-			members = append(members, StructMember{Name: fieldName, Value: typeRes})
+			return nil, fmt.Errorf("%v > %s: %v is not allowed in this context", stmt.Name, field.Name, fieldVal)
 		}
 	}
 
-	r.Environment[structName] = StructResult{Name: structName, Members: members}
-	return r.Environment[structName], nil
+	r.Environment[stmt.Name] = StructResult{Name: stmt.Name, Members: members}
+	return r.Environment[stmt.Name], nil
 }
 
 func (r *Runtime) EvaluateStmt(stmt Node) (Result, error) {

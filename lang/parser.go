@@ -129,20 +129,20 @@ type ExprStmt struct {
 // A MetaStmt represents a "meta" statement which specifies metadata for the protocol
 // being described.
 type MetaStmt struct {
-	Metadata map[Node]Node
+	Metadata map[string]Node
 	pos      Position
 }
 
 // A StructStmt represents a "struct" statement which declares a structure.
 type StructStmt struct {
-	Name      Node
-	Modifiers map[Node]Node
+	Name      string
+	Modifiers map[string]Node
 	Fields    []StructStmtMember
 	pos       Position
 }
 
 type StructStmtMember struct {
-	Name  Node
+	Name  string
 	Value Node
 }
 
@@ -222,7 +222,7 @@ func (ps *Parser) tryPostfix(left Node) (Node, error) {
 
 var ErrNotModifiers = fmt.Errorf("not the start of a statement modifier list")
 
-func (ps *Parser) ParseModifierList() (map[Node]Node, error) {
+func (ps *Parser) ParseModifierList() (map[string]Node, error) {
 	if !ps.matchesToken(TokenAt) {
 		return nil, ErrNotModifiers
 	}
@@ -235,11 +235,15 @@ func (ps *Parser) ParseModifierList() (map[Node]Node, error) {
 	}
 	ps.Advance(1)
 
-	modifiers := map[Node]Node{}
+	modifiers := map[string]Node{}
 	for !ps.IsDone() && ps.Cursor().Kind != TokenRParen {
-		key, err := ps.ParseExpr()
-		if err != nil {
-			return nil, err
+		var key Token
+
+		if ps.Cursor().Kind == TokenIdentifier {
+			key = ps.Cursor()
+			ps.Advance(1)
+		} else {
+			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "modifier name must be an identifier"}
 		}
 
 		var value Node
@@ -262,7 +266,7 @@ func (ps *Parser) ParseModifierList() (map[Node]Node, error) {
 			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of modifier list"}
 		}
 
-		modifiers[key] = value
+		modifiers[key.Value] = value
 	}
 
 	if ps.IsDone() {
@@ -322,19 +326,19 @@ func (ps *Parser) ParseMetaStmt(start int) (*MetaStmt, error) {
 	}
 	ps.Advance(1)
 
-	items := map[Node]Node{}
+	items := map[string]Node{}
 	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
-		var key *LiteralNode
+		var key Token
 
 		if ps.Cursor().Kind == TokenIdentifier {
-			key = &LiteralNode{Token: ps.Cursor()}
+			key = ps.Cursor()
 			ps.Advance(1)
 		} else {
 			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "key must be an identifier"}
 		}
 
 		if !ps.matchesToken(TokenColon) {
-			return nil, LangError{ErrorSyntax, key.Position(), "expected colon after key in metadata mapping"}
+			return nil, LangError{ErrorSyntax, key.Position, "expected colon after key in metadata mapping"}
 		}
 		ps.Advance(1)
 
@@ -350,7 +354,7 @@ func (ps *Parser) ParseMetaStmt(start int) (*MetaStmt, error) {
 			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of metadata mapping"}
 		}
 
-		items[key] = value
+		items[key.Value] = value
 	}
 
 	if ps.IsDone() {
@@ -630,87 +634,81 @@ func (ps *Parser) ParseLogicalOr() (Node, error) {
 	return left, nil
 }
 
-func (ps *Parser) ParseStructStmt(start int, modifiers map[Node]Node) (Node, error) {
-	lit, err := ps.ParseLiteral()
-	if err != nil {
-		return nil, err
-	}
-
-	if ident, ok := lit.(*LiteralNode); ok {
-		if ident.Token.Kind != TokenIdentifier {
-			return nil, LangError{
-				ErrorSyntax,
-				ident.Token.Position,
-				fmt.Sprintf("expected identifier, not %s", ident.Token.Kind),
-			}
-		}
-
-		if !ps.matchesToken(TokenLBrace) {
-			return nil, LangError{
-				ErrorSyntax,
-				lit.Position(),
-				"expected start of struct block",
-			}
-		}
-
-		ps.Advance(1)
-
-		fields := []StructStmtMember{}
-		for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
-			key, err := ps.ParseExpr()
-			if err != nil {
-				return nil, err
-			}
-
-			if !ps.matchesToken(TokenColon) {
-				pos := Position{Start: key.Position().End, End: key.Position().End + 1}
-				return nil, LangError{ErrorSyntax, pos, "expected colon after struct member name"}
-			}
-			ps.Advance(1)
-
-			value, err := ps.ParseExpr()
-			if err != nil {
-				return nil, err
-			}
-
-			if ps.matchesToken(TokenComma) {
-				ps.Advance(1)
-			} else if !ps.matchesToken(TokenRBrace) {
-				pos := Position{Start: value.Position().End, End: value.Position().End + 1}
-				return nil, LangError{ErrorSyntax, pos, "expected end or continuation of struct"}
-			}
-
-			fields = append(fields, StructStmtMember{key, value})
-		}
-
-		if ps.IsDone() {
-			return nil, LangError{
-				ErrorSyntax,
-				ps.Data[len(ps.Data)-1].Position,
-				"unclosed struct block",
-			}
-		}
-
-		end := ps.Cursor().Position.End
-		ps.Advance(1)
-
-		if !ps.matchesToken(TokenSemicolon) {
-			return nil, LangError{
-				ErrorSyntax,
-				Position{end - 1, end},
-				"expected semicolon",
-			}
-		}
-		ps.Advance(1)
-
-		return &StructStmt{Name: ident, Modifiers: modifiers, Fields: fields, pos: Position{start, end}}, nil
-	} else {
+func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, error) {
+	if ps.IsDone() || ps.Cursor().Kind != TokenIdentifier {
 		return nil, LangError{
 			ErrorSyntax,
-			lit.Position(),
-			fmt.Sprintf("expected identifier, not %s", lit.Type()),
+			Position{start, start + 1},
+			"expected struct identifier",
 		}
 	}
+
+	structName := ps.Cursor()
+	ps.Advance(1)
+
+	if !ps.matchesToken(TokenLBrace) {
+		return nil, LangError{
+			ErrorSyntax,
+			structName.Position,
+			"expected start of struct block",
+		}
+	}
+
+	ps.Advance(1)
+
+	fields := []StructStmtMember{}
+	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
+		var key Token
+
+		if ps.Cursor().Kind == TokenIdentifier {
+			key = ps.Cursor()
+			ps.Advance(1)
+		} else {
+			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "key must be an identifier"}
+		}
+
+		if !ps.matchesToken(TokenColon) {
+			pos := Position{Start: key.Position.End, End: key.Position.End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected colon after struct member name"}
+		}
+		ps.Advance(1)
+
+		value, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if ps.matchesToken(TokenComma) {
+			ps.Advance(1)
+		} else if !ps.matchesToken(TokenRBrace) {
+			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of struct"}
+		}
+
+		fields = append(fields, StructStmtMember{key.Value, value})
+	}
+
+	if ps.IsDone() {
+		return nil, LangError{
+			ErrorSyntax,
+			ps.Data[len(ps.Data)-1].Position,
+			"unclosed struct block",
+		}
+	}
+
+	end := ps.Cursor().Position.End
+	ps.Advance(1)
+
+	if !ps.matchesToken(TokenSemicolon) {
+		return nil, LangError{
+			ErrorSyntax,
+			Position{end - 1, end},
+			"expected semicolon",
+		}
+	}
+	ps.Advance(1)
+
+	return &StructStmt{Name: structName.Value, Modifiers: modifiers, Fields: fields, pos: Position{start, end}}, nil
 }
 
 func (ps *Parser) ParseExpr() (Node, error) {
