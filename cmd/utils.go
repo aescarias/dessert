@@ -69,7 +69,10 @@ func ShowSyntaxTree(node lang.Node, indent int) {
 		metaStmt := node.(*lang.MetaStmt)
 		fmt.Printf("%s> %s\n", tabbed, metaStmt.Type())
 
-		ShowSyntaxTree(metaStmt.Metadata, indent+1)
+		for key, value := range metaStmt.Metadata {
+			ShowSyntaxTree(key, indent+1)
+			ShowSyntaxTree(value, indent+2)
+		}
 	case lang.StmtStruct:
 		structStmt := node.(*lang.StructStmt)
 		fmt.Printf("%s> %s (%s)\n", tabbed, structStmt.Type(), structStmt.Name)

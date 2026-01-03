@@ -13,11 +13,11 @@ Dessert allows a developer implementing a data format to write a description of 
 Dessert is intended to be format-agnostic meaning that it should be capable of:
 
 - Describing a plaintext data format such as a datetime pattern, lines in a log file, a markup language, or a programming language.
-- Describing a binary data format such as a PNG file, a complete FAT filesystem, or formats delivered over-the-wire such as TCP.
+- Describing a binary data format such as a PNG file, a FAT filesystem, or formats delivered over-the-wire such as TCP or FTP.
 
-Dessert should provide the tools necessary to describe anything from basic sequential data to complex data that includes compression or bit-level access requirements without the boilerplate that is usually expected for these cases. Dessert should provide a standard library of common functions for math, data compression, encoding, and checksums.
+Dessert should provide the tools necessary to describe anything from basic sequential data to complex data that includes compression or bit-level access requirements without the boilerplate that is usually needed for these scenarios. Dessert should provide a standard library of common functions for dealing with math, data compression, encoding, and checksums.
 
-Dessert strives to combine tools commonly found in programming languages like C such as control flow, repetition, functions, and standard types, plus elements found in regular expressions such as character groups and greedy matches.
+Dessert strives to combine tools commonly found in programming languages like C such as control flow, repetition, functions, and standard types, plus elements found in regular expressions or meta-syntax notation such as value matches, alternations, and repetitions.
 
 == Notation
 
@@ -220,7 +220,7 @@ The following are examples of valid strings:
 string    := '"' character* '"' |
              "'" character* "'"
 
-character := "\x00".."\xff" | escape_sequence;
+character := "\x00".."\xff" | escape_sequence
 
 escape_sequence  := escaped_char | hex_byte_value | octal_byte_value
 escaped_char     := "\\" ("\\" | "'" | '"' | "n" | "r" | "t")
@@ -249,7 +249,7 @@ The following are examples of valid lists:
 [source,go]
 ----
 list     := "[" elements? "]"
-elements := literal ("," literal)*;
+elements := literal ("," literal)*
 
 // defined earlier
 literal  := integer | float | boolean | string | list | mapping
@@ -257,7 +257,7 @@ literal  := integer | float | boolean | string | list | mapping
 
 === Mappings
 
-Mappings are ordered collections of one or more key-value pairs. The keys and values may be of any valid data type. A mapping is enclosed in braces (`{}`). Its elements, the key-value pairs, are separated by a comma (`,`). The key and value are themselves separated by a colon (`:`).
+Mappings are ordered collections of key-value pairs. The keys and values may be of any valid data type. A mapping is enclosed in braces (`{}`). Its elements, the key-value pairs, are separated by a comma (`,`). The key and value are themselves separated by a colon (`:`).
 
 The following are examples of valid mappings:
 
@@ -315,7 +315,7 @@ The following unary operators are available:
 
 [source,go]
 ----
-unary_op := ("-" | "+" | "~") expr;
+unary_op := ("-" | "+" | "~") expr
 ----
 
 ==== Binary Operators
@@ -416,14 +416,22 @@ statement := meta_stmt | struct_stmt | expr_stmt
 
 === "meta" statement
 
-A meta statement defines metadata for the format being described. A Dessert document must include one `meta` statement. `meta` statements are usually the first statement of a Dessert document. No more than one `meta` statement should appear in a document.
+A meta statement defines metadata for the format being described. A Dessert document must include one `meta` statement. `meta` statements are usually the first statement of a Dessert document. No more than one `meta` statement may appear in a document.
 
 [source,go]
 ----
-meta_stmt := "meta" mapping ";"; 
+meta_stmt    := "meta" meta_mapping ";" 
+
+meta_mapping := "{" meta_pairs? "}"
+
+meta_pairs   := meta_pair ("," meta_pair)*
+meta_pair    := identifier ":" literal
+
+// defined earlier
+literal  := integer | float | boolean | string | list | mapping
 ----
 
-The "meta" statement consists in order of the keyword `meta`, a mapping, and the statement terminator `;`. The mapping inside a meta statement is referred to as the metadata mapping.
+The "meta" statement consists in order of the keyword `meta`, a metadata mapping, and the statement terminator `;`. Metadata mappings are similar in structure to <<Mappings>>; however, the keys in a metadata mapping must be identifiers.
 
 The keys the metadata mapping may contain are:
 
@@ -451,14 +459,6 @@ The keys the metadata mapping may contain are:
 |string
 |(optional) Details about the described format. The information that goes here is up to the author, but generally, it should describe the format's purpose and usage, creator(s), and basic structure, and contain links to technical references or
 specifications.
-
-|endian
-|string
-|(required) The byte endianness of the format being described. This must either be the string "little" or the string "big", meaning little-endian byte order and big-endian or network byte order, respectively.
-
-|root
-|identifier
-|(required) The root structure from which to start parsing input data. This must be an identifier referring to a structure.
 |===
 
 === Struct statements
@@ -493,7 +493,20 @@ array_name        := (unsigned_int_name | signed_int_name | float_name) "[" inte
 match_name        := ("match" "[" string "]") | string
 ----
 
-Struct statements can be affected by <<Statement modifiers>>. The only available modifier is the `endian` field which if specified must be either the string `"little"` or the string `"big"`. This modifier controls the byte endianness of all integer fields contained in the struct. If the field is not specified, the endianness should be the same as the endianness of the parent structure.
+Struct statements can be affected by <<Statement modifiers>>. The modifiers available are:
+
+[cols="1,1,3"]
+|===
+|Name |Type |Description
+
+|endian
+|string
+|(required) The byte endianness assumed for all integer sfields in the structure. This must either be the string "little" or the string "big", meaning little-endian byte order and big-endian or network byte order, respectively.
+
+|root
+|boolean
+|(required in a root structure; must not be specified otherwise) Whether this is the root structure of the document. If true, this will be the structure from which Dessert will start parsing input data into.
+|===
 
 === Expression statements
 

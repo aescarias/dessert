@@ -129,7 +129,7 @@ type ExprStmt struct {
 // A MetaStmt represents a "meta" statement which specifies metadata for the protocol
 // being described.
 type MetaStmt struct {
-	Metadata *MapNode
+	Metadata map[Node]Node
 	pos      Position
 }
 
@@ -150,7 +150,7 @@ func (es *ExprStmt) Type() NodeKind     { return StmtExpr }
 func (es *ExprStmt) Position() Position { return es.Expr.Position() }
 
 func (ms *MetaStmt) Type() NodeKind     { return StmtMeta }
-func (ms *MetaStmt) Position() Position { return ms.Metadata.Position() }
+func (ms *MetaStmt) Position() Position { return ms.pos }
 
 func (ss *StructStmt) Type() NodeKind     { return StmtStruct }
 func (ss *StructStmt) Position() Position { return ss.pos }
@@ -274,6 +274,135 @@ func (ps *Parser) ParseModifierList() (map[Node]Node, error) {
 	return modifiers, nil
 }
 
+func (ps *Parser) ParseMap() (*MapNode, error) {
+	start := ps.Cursor().Position.Start
+	ps.Advance(1)
+
+	items := map[Node]Node{}
+	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
+		key, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if !ps.matchesToken(TokenColon) {
+			pos := Position{Start: key.Position().End, End: key.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected colon after key in mapping"}
+		}
+		ps.Advance(1)
+
+		value, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if ps.matchesToken(TokenComma) {
+			ps.Advance(1)
+		} else if !ps.matchesToken(TokenRBrace) {
+			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of mapping"}
+		}
+
+		items[key] = value
+	}
+
+	if ps.IsDone() {
+		return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing brace"}
+	}
+
+	end := ps.Cursor().Position.End
+	ps.Advance(1)
+
+	return &MapNode{Items: items, pos: Position{start, end}}, nil
+}
+
+func (ps *Parser) ParseMetaStmt(start int) (*MetaStmt, error) {
+	if ps.IsDone() || ps.Cursor().Kind != TokenLBrace {
+		return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected start of metadata mapping"}
+	}
+	ps.Advance(1)
+
+	items := map[Node]Node{}
+	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
+		var key *LiteralNode
+
+		if ps.Cursor().Kind == TokenIdentifier {
+			key = &LiteralNode{Token: ps.Cursor()}
+			ps.Advance(1)
+		} else {
+			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "key must be an identifier"}
+		}
+
+		if !ps.matchesToken(TokenColon) {
+			return nil, LangError{ErrorSyntax, key.Position(), "expected colon after key in metadata mapping"}
+		}
+		ps.Advance(1)
+
+		value, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if ps.matchesToken(TokenComma) {
+			ps.Advance(1)
+		} else if !ps.matchesToken(TokenRBrace) {
+			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of metadata mapping"}
+		}
+
+		items[key] = value
+	}
+
+	if ps.IsDone() {
+		return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing brace"}
+	}
+
+	end := ps.Cursor().Position.End
+	ps.Advance(1)
+
+	if !ps.matchesToken(TokenSemicolon) {
+		return nil, LangError{
+			ErrorSyntax,
+			Position{end - 1, end},
+			"expected semicolon",
+		}
+	}
+	ps.Advance(1)
+
+	return &MetaStmt{Metadata: items, pos: Position{start, end}}, nil
+}
+
+func (ps *Parser) ParseList() (*ListNode, error) {
+	start := ps.Cursor().Position.Start
+	ps.Advance(1)
+
+	items := []Node{}
+	for !ps.IsDone() && ps.Cursor().Kind != TokenRBracket {
+		item, err := ps.ParseExpr()
+		if err != nil {
+			return nil, err
+		}
+
+		if ps.matchesToken(TokenComma) {
+			ps.Advance(1)
+		} else if !ps.matchesToken(TokenRBracket) {
+			pos := Position{Start: item.Position().End, End: item.Position().End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of list"}
+		}
+
+		items = append(items, item)
+	}
+
+	if ps.IsDone() {
+		return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing bracket"}
+	}
+
+	end := ps.Cursor().Position.End
+	ps.Advance(1)
+
+	return &ListNode{Items: items, pos: Position{start, end}}, nil
+}
+
 func (ps *Parser) ParseLiteral() (Node, error) {
 	var left Node
 
@@ -312,74 +441,17 @@ func (ps *Parser) ParseLiteral() (Node, error) {
 
 		left = expr
 	case TokenLBrace:
-		start := ps.Cursor().Position.Start
-		ps.Advance(1)
-
-		items := map[Node]Node{}
-		for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
-			key, err := ps.ParseExpr()
-			if err != nil {
-				return nil, err
-			}
-
-			if !ps.matchesToken(TokenColon) {
-				pos := Position{Start: key.Position().End, End: key.Position().End + 1}
-				return nil, LangError{ErrorSyntax, pos, "expected colon after key in mapping"}
-			}
-			ps.Advance(1)
-
-			value, err := ps.ParseExpr()
-			if err != nil {
-				return nil, err
-			}
-
-			if ps.matchesToken(TokenComma) {
-				ps.Advance(1)
-			} else if !ps.matchesToken(TokenRBrace) {
-				pos := Position{Start: value.Position().End, End: value.Position().End + 1}
-				return nil, LangError{ErrorSyntax, pos, "expected end or continuation of mapping"}
-			}
-
-			items[key] = value
+		if mapping, err := ps.ParseMap(); err != nil {
+			return nil, err
+		} else {
+			left = mapping
 		}
-
-		if ps.IsDone() {
-			return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing brace"}
-		}
-
-		end := ps.Cursor().Position.End
-		ps.Advance(1)
-
-		left = &MapNode{Items: items, pos: Position{start, end}}
 	case TokenLBracket:
-		start := ps.Cursor().Position.Start
-		ps.Advance(1)
-
-		items := []Node{}
-		for !ps.IsDone() && ps.Cursor().Kind != TokenRBracket {
-			item, err := ps.ParseExpr()
-			if err != nil {
-				return nil, err
-			}
-
-			if ps.matchesToken(TokenComma) {
-				ps.Advance(1)
-			} else if !ps.matchesToken(TokenRBracket) {
-				pos := Position{Start: item.Position().End, End: item.Position().End + 1}
-				return nil, LangError{ErrorSyntax, pos, "expected end or continuation of list"}
-			}
-
-			items = append(items, item)
+		if list, err := ps.ParseList(); err != nil {
+			return nil, err
+		} else {
+			left = list
 		}
-
-		if ps.IsDone() {
-			return nil, LangError{ErrorSyntax, Position{start, start + 1}, "expected closing bracket"}
-		}
-
-		end := ps.Cursor().Position.End
-		ps.Advance(1)
-
-		left = &ListNode{Items: items, pos: Position{start, end}}
 	}
 
 	if left == nil {
@@ -556,34 +628,6 @@ func (ps *Parser) ParseLogicalOr() (Node, error) {
 	}
 
 	return left, nil
-}
-
-func (ps *Parser) ParseMetaStmt(start int) (Node, error) {
-	lit, err := ps.ParseLiteral()
-	if err != nil {
-		return nil, err
-	}
-
-	if mapping, ok := lit.(*MapNode); ok {
-		if !ps.matchesToken(TokenSemicolon) {
-			return nil, LangError{
-				ErrorSyntax,
-				Position{lit.Position().End - 1, lit.Position().End},
-				"expected semicolon",
-			}
-		}
-
-		end := ps.Cursor().Position.End
-		ps.Advance(1)
-
-		return &MetaStmt{Metadata: mapping, pos: Position{start, end}}, nil
-	} else {
-		return nil, LangError{
-			ErrorSyntax,
-			lit.Position(),
-			fmt.Sprintf("expected mapping, not %s", lit.Type()),
-		}
-	}
 }
 
 func (ps *Parser) ParseStructStmt(start int, modifiers map[Node]Node) (Node, error) {

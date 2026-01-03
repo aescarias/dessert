@@ -77,8 +77,6 @@ type Meta struct {
 	Extensions []string
 	Mime       []string
 	Docs       string
-	Endian     string
-	Root       IdentResult
 }
 
 func ParseMetadata(mapping MapResult) (*Meta, error) {
@@ -109,26 +107,12 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 
 	mimeTypes, err, errIdx := ToStringList(mimes)
 	if err != nil {
-		return nil, fmt.Errorf("meta > exts[%d]: %w", errIdx, err)
+		return nil, fmt.Errorf("meta > mime[%d]: %w", errIdx, err)
 	}
 
 	docs, err := GetKeyByIdent[StringResult](mapping, "docs", false)
 	if err != nil {
 		return nil, fmt.Errorf("meta: %w", err)
-	}
-
-	root, err := GetKeyByIdent[IdentResult](mapping, "root", true)
-	if err != nil {
-		return nil, fmt.Errorf("meta: %w", err)
-	}
-
-	endian, err := GetKeyByIdent[StringResult](mapping, "endian", true)
-	if err != nil {
-		return nil, fmt.Errorf("meta: %w", err)
-	}
-
-	if endian != "little" && endian != "big" {
-		return nil, fmt.Errorf("meta > endian: must be 'big' or 'little'")
 	}
 
 	return &Meta{
@@ -137,8 +121,6 @@ func ParseMetadata(mapping MapResult) (*Meta, error) {
 		Extensions: extensions,
 		Mime:       mimeTypes,
 		Docs:       string(docs),
-		Endian:     string(endian),
-		Root:       root,
 	}, nil
 }
 
@@ -520,12 +502,21 @@ func (r *Runtime) EvaluateExprStmt(stmt ExprStmt) (Result, error) {
 }
 
 func (r *Runtime) EvaluateMetaStmt(stmt MetaStmt) (Result, error) {
-	metaMap, err := r.EvaluateMap(*stmt.Metadata)
-	if err != nil {
-		return nil, err
+	metaMap := MapResult{}
+	for keyNode, valueNode := range stmt.Metadata {
+		key, err := r.EvaluateExpr(keyNode)
+		if err != nil {
+			return nil, err
+		}
+
+		value, err := r.EvaluateExpr(valueNode)
+		if err != nil {
+			return nil, err
+		}
+		metaMap[key] = value
 	}
 
-	metadata, err := ParseMetadata(metaMap.(MapResult))
+	metadata, err := ParseMetadata(metaMap)
 	if err != nil {
 		return nil, err
 	}
