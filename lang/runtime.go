@@ -127,6 +127,7 @@ func ParseMetadata(meta map[string]Result) (*Meta, error) {
 type ResultKind string
 
 const (
+	ResBoolean ResultKind = "Boolean"
 	ResInteger ResultKind = "Integer"
 	ResFloat   ResultKind = "Float"
 	ResString  ResultKind = "String"
@@ -141,6 +142,7 @@ type Result interface {
 	Kind() ResultKind
 }
 
+type BooleanResult bool
 type IntResult struct{ *big.Int }
 type FloatResult struct{ *big.Float }
 type StringResult string
@@ -153,21 +155,24 @@ type TypeResult struct {
 
 type MetaResult Meta
 type StructResult struct {
-	Name    string
-	Members []StructMember
+	Name      string
+	Fields    []StructField
+	Modifiers map[string]Result
 }
 
-type StructMember struct {
-	Name  string
-	Value Result
+type StructField struct {
+	Name      string
+	Value     Result
+	Modifiers map[string]Result
 }
 
-func (ir IntResult) Kind() ResultKind    { return ResInteger }
-func (fr FloatResult) Kind() ResultKind  { return ResFloat }
-func (sr StringResult) Kind() ResultKind { return ResString }
-func (mr MapResult) Kind() ResultKind    { return ResMap }
-func (lr ListResult) Kind() ResultKind   { return ResList }
-func (tr TypeResult) Kind() ResultKind   { return ResType }
+func (br BooleanResult) Kind() ResultKind { return ResBoolean }
+func (ir IntResult) Kind() ResultKind     { return ResInteger }
+func (fr FloatResult) Kind() ResultKind   { return ResFloat }
+func (sr StringResult) Kind() ResultKind  { return ResString }
+func (mr MapResult) Kind() ResultKind     { return ResMap }
+func (lr ListResult) Kind() ResultKind    { return ResList }
+func (tr TypeResult) Kind() ResultKind    { return ResType }
 
 func (mr MetaResult) Kind() ResultKind   { return ResMeta }
 func (sr StructResult) Kind() ResultKind { return ResStruct }
@@ -514,26 +519,58 @@ func (r *Runtime) EvaluateMetaStmt(stmt MetaStmt) (Result, error) {
 	return MetaResult(r.Metadata), nil
 }
 
-func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
-	members := []StructMember{}
+func (r *Runtime) EvaluateModifierList(list map[string]Node) (map[string]Result, error) {
+	modifiers := map[string]Result{}
 
+	for key, valueNode := range list {
+		if valueNode == nil {
+			modifiers[key] = BooleanResult(true)
+			continue
+		}
+
+		value, err := r.EvaluateExpr(valueNode)
+		if err != nil {
+			return nil, err
+		}
+
+		modifiers[key] = value
+	}
+
+	return modifiers, nil
+}
+
+func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
+	modifiers, err := r.EvaluateModifierList(stmt.Modifiers)
+	if err != nil {
+		return nil, err
+	}
+
+	fields := []StructField{}
 	for _, field := range stmt.Fields {
 		fieldVal, err := r.EvaluateExpr(field.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%v > %s: %w", stmt.Name, field.Name, err)
 		}
 
+		fieldMod, err := r.EvaluateModifierList(field.Modifiers)
+		if err != nil {
+			return nil, fmt.Errorf("%v > modifiers for %s: %w", stmt.Name, field.Name, err)
+		}
+
+		var fieldItem Result
 		switch item := fieldVal.(type) {
 		case TypeResult:
-			members = append(members, StructMember{Name: field.Name, Value: item})
+			fieldItem = item
 		case StringResult:
-			members = append(members, StructMember{Name: field.Name, Value: TypeResult{Name: TpMatch, Params: []Result{item}}})
-		default: // for all our other types
+			fieldItem = TypeResult{Name: TpMatch, Params: []Result{item}}
+		default:
 			return nil, fmt.Errorf("%v > %s: %v is not allowed in this context", stmt.Name, field.Name, fieldVal)
 		}
+
+		fields = append(fields, StructField{Name: field.Name, Value: fieldItem, Modifiers: fieldMod})
 	}
 
-	r.Environment[stmt.Name] = StructResult{Name: stmt.Name, Members: members}
+	r.Environment[stmt.Name] = StructResult{Name: stmt.Name, Fields: fields, Modifiers: modifiers}
 	return r.Environment[stmt.Name], nil
 }
 

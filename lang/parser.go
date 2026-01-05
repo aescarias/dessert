@@ -133,17 +133,20 @@ type MetaStmt struct {
 	pos      Position
 }
 
-// A StructStmt represents a "struct" statement which declares a structure.
+// A StructStmt represents a "struct" statement which declares a structure
+// containing a collection of fields.
 type StructStmt struct {
 	Name      string
 	Modifiers map[string]Node
-	Fields    []StructStmtMember
+	Fields    []StructStmtField
 	pos       Position
 }
 
-type StructStmtMember struct {
-	Name  string
-	Value Node
+// A StructStmtField represents a field inside a "struct" statement.
+type StructStmtField struct {
+	Name      string
+	Value     Node
+	Modifiers map[string]Node
 }
 
 func (es *ExprStmt) Type() NodeKind     { return StmtExpr }
@@ -656,20 +659,26 @@ func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, e
 
 	ps.Advance(1)
 
-	fields := []StructStmtMember{}
+	fields := []StructStmtField{}
 	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
-		var key Token
+		modifiers, err := ps.ParseModifierList()
+		if errors.Is(err, ErrNotModifiers) {
+			modifiers = nil
+		} else if err != nil {
+			return nil, err
+		}
 
+		var fieldName Token
 		if ps.Cursor().Kind == TokenIdentifier {
-			key = ps.Cursor()
+			fieldName = ps.Cursor()
 			ps.Advance(1)
 		} else {
-			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "key must be an identifier"}
+			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "field name must be an identifier"}
 		}
 
 		if !ps.matchesToken(TokenColon) {
-			pos := Position{Start: key.Position.End, End: key.Position.End + 1}
-			return nil, LangError{ErrorSyntax, pos, "expected colon after struct member name"}
+			pos := Position{Start: fieldName.Position.End, End: fieldName.Position.End + 1}
+			return nil, LangError{ErrorSyntax, pos, "expected colon after struct field name"}
 		}
 		ps.Advance(1)
 
@@ -685,7 +694,7 @@ func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, e
 			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of struct"}
 		}
 
-		fields = append(fields, StructStmtMember{key.Value, value})
+		fields = append(fields, StructStmtField{Name: fieldName.Value, Value: value, Modifiers: modifiers})
 	}
 
 	if ps.IsDone() {
