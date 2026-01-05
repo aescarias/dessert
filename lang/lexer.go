@@ -46,8 +46,8 @@ const (
 	TokenBitwiseAnd                    // &
 	TokenBitwiseNot                    // ~
 	TokenBitwiseXor                    // ^
-	TokenBitwiseLeft                   // >>
-	TokenBitwiseRight                  // <<
+	TokenBitwiseLeft                   // <<
+	TokenBitwiseRight                  // >>
 	TokenRemainder                     // %
 	TokenNot                           // !
 	TokenNotEq                         // !=

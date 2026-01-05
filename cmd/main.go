@@ -12,6 +12,51 @@ const (
 	ExitUsage   int = 2
 )
 
+func ShowAST(filename string, contents []byte) {
+	lx := lang.NewLexer(contents)
+	if err := lx.Process(); err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	ps := lang.NewParser(lx.Tokens)
+	statements, err := ps.Parse()
+	if err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	for _, stmt := range statements {
+		ShowSyntaxTree(stmt, 0)
+	}
+}
+
+func ShowEvalBlocks(filename string, contents []byte) {
+	lx := lang.NewLexer(contents)
+	if err := lx.Process(); err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	ps := lang.NewParser(lx.Tokens)
+	statements, err := ps.Parse()
+	if err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	eval := lang.NewRuntime()
+	results, err := eval.Run(statements)
+	if err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	for _, result := range results {
+		fmt.Printf("%#v\n", result)
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("usage: dessert [command] [options]")
@@ -35,60 +80,13 @@ func main() {
 		}
 
 		switch process {
-		case "tokens":
-			lx := lang.NewLexer(contents)
-			if err := lx.Process(); err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			for _, tok := range lx.Tokens {
-				fmt.Printf("%s %q %d..%d\n", tok.Kind, tok.Value, tok.Position.Start, tok.Position.End)
-			}
 		case "ast":
-			lx := lang.NewLexer(contents)
-			if err := lx.Process(); err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			ps := lang.NewParser(lx.Tokens)
-			statements, err := ps.Parse()
-			if err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			for _, stmt := range statements {
-				ShowSyntaxTree(stmt, 0)
-			}
+			ShowAST(filename, contents)
 		case "eval":
-			lx := lang.NewLexer(contents)
-			if err := lx.Process(); err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			ps := lang.NewParser(lx.Tokens)
-			statements, err := ps.Parse()
-			if err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			eval := lang.NewRuntime()
-			results, err := eval.Run(statements)
-			if err != nil {
-				lang.ReportError(filename, contents, err)
-				os.Exit(ExitFailure)
-			}
-
-			for _, result := range results {
-				fmt.Printf("%#v\n", result)
-			}
+			ShowEvalBlocks(filename, contents)
 		default:
 			fmt.Printf("unknown process %q\n", process)
-			fmt.Printf("processes: ast, eval, tokens")
+			fmt.Printf("processes: ast, eval\n")
 			os.Exit(ExitUsage)
 		}
 	default:
