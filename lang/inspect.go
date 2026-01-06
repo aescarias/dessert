@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-func readInt(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
+func readNumeric(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
 	switch kind.Name {
 	case TpUint8:
 		var num uint8
@@ -32,6 +32,45 @@ func readInt(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (an
 			return nil, err
 		}
 		return num, nil
+	case TpUint24:
+		intBytes := make([]byte, 3)
+		if _, err := handle.Read(intBytes); err != nil {
+			return nil, err
+		}
+
+		var num uint32
+		switch endian {
+		case binary.BigEndian:
+			num = uint32(intBytes[2]) | uint32(intBytes[1])<<8 | uint32(intBytes[0])<<16
+		case binary.LittleEndian:
+			num = uint32(intBytes[0]) | uint32(intBytes[1])<<8 | uint32(intBytes[2])<<16
+		default:
+			return nil, fmt.Errorf("unexpected internal endian value")
+		}
+
+		return num, nil
+	case TpInt24:
+		intBytes := make([]byte, 3)
+		if _, err := handle.Read(intBytes); err != nil {
+			return nil, err
+		}
+
+		var num uint32
+		switch endian {
+		case binary.BigEndian:
+			num = uint32(intBytes[2]) | uint32(intBytes[1])<<8 | uint32(intBytes[0])<<16
+		case binary.LittleEndian:
+			num = uint32(intBytes[0]) | uint32(intBytes[1])<<8 | uint32(intBytes[2])<<16
+		default:
+			return nil, fmt.Errorf("unexpected internal endian value")
+		}
+
+		if num&0x800000 != 0 {
+			// sign bit set, flip the bits
+			return int32(num | 0xFF000000), nil
+		}
+
+		return int32(num), nil
 	case TpUint32:
 		var num uint32
 		if err := binary.Read(handle, endian, &num); err != nil {
@@ -56,15 +95,27 @@ func readInt(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (an
 			return nil, err
 		}
 		return num, nil
+	case TpFloat32:
+		var num float32
+		if err := binary.Read(handle, endian, &num); err != nil {
+			return nil, err
+		}
+		return num, nil
+	case TpFloat64:
+		var num float64
+		if err := binary.Read(handle, endian, &num); err != nil {
+			return nil, err
+		}
+		return num, nil
 	default:
-		return nil, fmt.Errorf("%s is not an integer type", kind.Name)
+		return nil, fmt.Errorf("%s is not a supported numeric type", kind.Name)
 	}
 }
 
 func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
 	switch kind.Name {
-	case TpUint8, TpInt8, TpUint16, TpInt16, TpUint32, TpInt32, TpUint64, TpInt64:
-		return readInt(handle, kind, endian)
+	case TpUint8, TpInt8, TpUint16, TpInt16, TpUint24, TpInt24, TpUint32, TpInt32, TpUint64, TpInt64, TpFloat32, TpFloat64:
+		return readNumeric(handle, kind, endian)
 	case TpMatch:
 		matchStr, err := ResultMustBe[StringResult](kind.Params[0])
 		if err != nil {

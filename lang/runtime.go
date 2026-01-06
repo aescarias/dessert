@@ -10,10 +10,12 @@ type TypeName string
 const (
 	TpUint8   TypeName = "uint8"   // Unsigned 8-bit integer
 	TpUint16  TypeName = "uint16"  // Unsigned 16-bit integer
+	TpUint24  TypeName = "uint24"  // Unsigned 24-bit integer
 	TpUint32  TypeName = "uint32"  // Unsigned 32-bit integer
 	TpUint64  TypeName = "uint64"  // Unsigned 64-bit integer
 	TpInt8    TypeName = "int8"    // Signed 8-bit integer
 	TpInt16   TypeName = "int16"   // Signed 16-bit integer
+	TpInt24   TypeName = "int24"   // Signed 24-bit integer
 	TpInt32   TypeName = "int32"   // Signed 32-bit integer
 	TpInt64   TypeName = "int64"   // Signed 64-bit integer
 	TpFloat32 TypeName = "float32" // "Single-precision" 32-bit floating point number
@@ -30,10 +32,12 @@ const (
 var AvailableTypeNames = []TypeName{
 	TpUint8,
 	TpUint16,
+	TpUint24,
 	TpUint32,
 	TpUint64,
 	TpInt8,
 	TpInt16,
+	TpInt24,
 	TpInt32,
 	TpInt64,
 	TpFloat32,
