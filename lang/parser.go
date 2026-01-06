@@ -687,12 +687,11 @@ func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, e
 			return nil, err
 		}
 
-		if ps.matchesToken(TokenComma) {
-			ps.Advance(1)
-		} else if !ps.matchesToken(TokenRBrace) {
+		if !ps.matchesToken(TokenSemicolon) {
 			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
-			return nil, LangError{ErrorSyntax, pos, "expected end or continuation of struct"}
+			return nil, LangError{ErrorSyntax, pos, "field must end with semicolon"}
 		}
+		ps.Advance(1)
 
 		fields = append(fields, StructStmtField{Name: fieldName.Value, Value: value, Modifiers: modifiers})
 	}

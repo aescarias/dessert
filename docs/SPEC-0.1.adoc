@@ -1,6 +1,6 @@
 = The Dessert Language Specification
 Angel Carias <lotta.dev@outlook.com>
-v0.1, 2026-01-05
+v0.1, 2026-01-06
 :toc: auto
 :sectnums: |,all|
 
@@ -70,9 +70,9 @@ Dessert defines the following keywords:
 
 [source,text]
 ----
-true    false    struct    enum      pattern    import  
-meta    let      const     if        else       switch  
-for     while    func      return
+true      false    struct    enum    import  
+meta      let      const     if      else       
+switch    for      while     func    return
 ----
 
 ==== Operators and punctuation
@@ -463,12 +463,12 @@ specifications.
 
 === Struct statements
 
-The `struct` statement defines a structure, an ordered sequence of named elements called fields. Each struct field has a name, a type, and optionally, a set of modifiers. Each field is separated by a comma (`,`).
+The `struct` statement defines a structure, an ordered sequence of named elements called fields. Each struct field has a name, a type, and optionally, a set of modifiers. Each field ends with a semicolon (`;`).
 
 [source,go]
 ----
 struct_stmt := modifier_list? "struct" identifier "{" fields? "}" ";"
-fields      := field ("," field)*
+fields      := (field ";")*
 field       := modifier_list? identifier ":" type_name
 ----
 

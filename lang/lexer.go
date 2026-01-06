@@ -150,22 +150,21 @@ func (t TokenKind) String() string {
 type KeywordKind string
 
 const (
-	KeywordTrue    KeywordKind = "true"
-	KeywordFalse   KeywordKind = "false"
-	KeywordStruct  KeywordKind = "struct"
-	KeywordEnum    KeywordKind = "enum"
-	KeywordPattern KeywordKind = "pattern"
-	KeywordImport  KeywordKind = "import"
-	KeywordMeta    KeywordKind = "meta"
-	KeywordLet     KeywordKind = "let"
-	KeywordConst   KeywordKind = "const"
-	KeywordIf      KeywordKind = "if"
-	KeywordElse    KeywordKind = "else"
-	KeywordSwitch  KeywordKind = "switch"
-	KeywordFor     KeywordKind = "for"
-	KeywordWhile   KeywordKind = "while"
-	KeywordFunc    KeywordKind = "func"
-	KeywordReturn  KeywordKind = "return"
+	KeywordTrue   KeywordKind = "true"
+	KeywordFalse  KeywordKind = "false"
+	KeywordStruct KeywordKind = "struct"
+	KeywordEnum   KeywordKind = "enum"
+	KeywordImport KeywordKind = "import"
+	KeywordMeta   KeywordKind = "meta"
+	KeywordLet    KeywordKind = "let"
+	KeywordConst  KeywordKind = "const"
+	KeywordIf     KeywordKind = "if"
+	KeywordElse   KeywordKind = "else"
+	KeywordSwitch KeywordKind = "switch"
+	KeywordFor    KeywordKind = "for"
+	KeywordWhile  KeywordKind = "while"
+	KeywordFunc   KeywordKind = "func"
+	KeywordReturn KeywordKind = "return"
 )
 
 var AvailableKeywords = []KeywordKind{
@@ -173,7 +172,6 @@ var AvailableKeywords = []KeywordKind{
 	KeywordFalse,
 	KeywordStruct,
 	KeywordEnum,
-	KeywordPattern,
 	KeywordImport,
 	KeywordMeta,
 	KeywordLet,
