@@ -8,27 +8,72 @@ meta {
 // https://www.sqlite.org/fileformat.html#the_database_header
 @(root, endian: "big")
 struct DatabaseFileHeader {
-    magic                     : "SQLite format 3\000",    
-    page_size                 : uint16,
-    ff_write_version          : uint8,
-    ff_read_version           : uint8,
-    reserved_byte_count       : uint8,
-    max_emb_payload_fraction  : uint8,
-    min_emb_payload_fraction  : uint8,
-    leaf_payload_fraction     : uint8,
-    file_change_counter       : uint32,
-    page_count                : uint32,
-    first_freelist_page       : uint32,
-    freelist_page_count       : uint32,
-    schema_cookie             : uint32,
-    schema_format_number      : uint32,
-    default_page_cache_size   : uint32,
-    vacuum_largest_btree_page : uint32,
-    text_encoding             : uint32,
-    user_version              : uint32,
-    is_incremental_vacuum     : uint32,
-    application_id            : uint32,
-    reserved                  : byte[20],
-    last_change_counter       : uint32,  
-    last_sqlite_version       : uint32
+    @(name: "Header string")
+    magic: "SQLite format 3\000",    
+    
+    @(name: "Database page size (bytes)")
+    page_size: uint16,
+
+    @(name: "File format write version")
+    ff_write_version: uint8,
+
+    @(name: "File format read version")
+    ff_read_version: uint8,
+
+    @(name: "Bytes of unused space in page")
+    reserved_byte_count: uint8,
+
+    @(name: "Maximum embedded payload fraction")
+    max_emb_payload_fraction: uint8,
+
+    @(name: "Minimum embedded payload fraction")
+    min_emb_payload_fraction: uint8,
+
+    @(name: "Leaf payload fraction")
+    leaf_payload_fraction: uint8,
+
+    @(name: "File change counter")
+    file_change_counter: uint32,
+
+    @(name: "Number of pages")
+    page_count: uint32,
+
+    @(name: "Page number of first freelist trunk")
+    first_freelist_page: uint32,
+
+    @(name: "Number of freelist pages")
+    freelist_page_count: uint32,
+
+    @(name: "Schema cookie")
+    schema_cookie: uint32,
+
+    @(name: "Schema format number")
+    schema_format_number: uint32,
+
+    @(name: "Default page cache size")
+    default_page_cache_size: uint32,
+
+    @(name: "Page number of largest root b-tree (vacuum mode)")
+    vacuum_largest_btree_page: uint32,
+
+    @(name: "Text encoding")
+    text_encoding: uint32,
+
+    @(name: "User version (pragma)")
+    user_version: uint32,
+
+    @(name: "Incremental-vacuum mode?")
+    is_incremental_vacuum: uint32,
+
+    @(name: "Application ID")
+    application_id: uint32,
+
+    @(name: "Reserved")
+    reserved: byte[20],
+
+    @(name: "Version is for transaction")
+    last_change_counter: uint32,  
+
+    @(name: "Version of last SQLite writer")
+    last_sqlite_version: uint32
 };

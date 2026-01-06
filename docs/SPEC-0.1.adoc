@@ -36,7 +36,7 @@ Comments serve as documentation within a definition. Comments have no syntactica
 Dessert supports two types of comments:
 
 - Line comments start with the sequence `//` and end with a newline character.
-- Block comments start with the sequence `/\*` and end with the sequence `*/`.
+- Block comments start with the sequence `\\*` and end with the sequence `*/`.
 
 [source,go]
 ----
@@ -472,27 +472,6 @@ fields      := field ("," field)*
 field       := modifier_list? identifier ":" type_name
 ----
 
-The type name is an identifier referring to one of the following data types: 
-
-- The unsigned integer types `uint8`, `uint16`, `uint24`, `uint32`, and `uint64`.
-- The signed integer types `int8`, `int16`, `int24`, `int32`, and `int64`.
-- The floating point types `float32` and `float64`.
-- The `byte[n]` type.
-- The `match` type.
-
-[source,go]
-----
-type_name := unsigned_int_name | signed_int_name | float_name | byte_name |
-             array_name | match_name
-
-unsigned_int_name := "uint8" | "uint16" | "uint24" | "uint32" | "uint64"
-signed_int_name   := "int8" | "int16" | "int24" | "int32" | "int64"
-float_name        := "float32" | "float64"
-byte_name         := "byte" "[" integer "]"
-array_name        := (unsigned_int_name | signed_int_name | float_name) "[" integer "]"
-match_name        := ("match" "[" string "]") | string
-----
-
 Struct statements can be affected by <<Statement modifiers>>. The modifiers available are:
 
 [cols="1,1,3"]
@@ -501,12 +480,44 @@ Struct statements can be affected by <<Statement modifiers>>. The modifiers avai
 
 |endian
 |string
-|(required) The byte endianness assumed for all integer fields in the structure. This must either be the string "little" or the string "big", meaning little-endian byte order and big-endian or network byte order, respectively.
+|(required in a root structure; optional otherwise) The byte endianness assumed for all integer fields in the structure. This must either be the string "little" or the string "big", meaning little-endian byte order and big-endian or network byte order, respectively.
+
+If the endian modifier is missing, the endianness will be according to the parent structure that contains a reference to this structure. If the root structure does not have an endian modifier, an error shall be raised.
 
 |root
 |boolean
 |(required in a root structure; must not be specified otherwise) Whether this is the root structure of the document. If true, this will be the structure from which Dessert will start parsing input data into.
 |===
+
+==== Struct field data types
+
+The type of a field must be an identifier to a field data type. A field data type specifies how a sequence of bytes or characters in a data format shall be interpreted. 
+
+A field type may be either of:
+
+- One of the following pre-declared data types:
++
+[source,ruby]
+----
+uint8      uint16      uint24      uint32      uint64
+int8       int16       int24       int32       int64
+float32    float64                 byte 
+----
+
+- An array of the form `type[n]` where `type` is a field type and `n` is the amount of values of such field type to parse.
+- An identifier referring to a struct.
+- A string literal representing a sequence of bytes to match exactly.
+
+[source,go]
+----
+type_name := unsigned_int_name | signed_int_name | float_name | "byte" |
+             array_name | string | identifier
+
+unsigned_int_name := "uint8" | "uint16" | "uint24" | "uint32" | "uint64"
+signed_int_name   := "int8" | "int16" | "int24" | "int32" | "int64"
+float_name        := "float32" | "float64"
+array_name        := type_name "[" integer "]"
+----
 
 Struct statement fields can also be affected by modifiers. The modifiers available are:
 

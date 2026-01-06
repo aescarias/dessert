@@ -6,64 +6,65 @@ import (
 	"io"
 )
 
-func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
+func readInt(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
 	switch kind.Name {
 	case TpUint8:
 		var num uint8
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpInt8:
 		var num int8
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpUint16:
 		var num uint16
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpInt16:
 		var num int16
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpUint32:
 		var num uint32
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpInt32:
 		var num int32
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpUint64:
 		var num uint64
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
 	case TpInt64:
 		var num int64
 		if err := binary.Read(handle, endian, &num); err != nil {
 			return nil, err
 		}
-
 		return num, nil
+	default:
+		return nil, fmt.Errorf("%s is not an integer type", kind.Name)
+	}
+}
+
+func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
+	switch kind.Name {
+	case TpUint8, TpInt8, TpUint16, TpInt16, TpUint32, TpInt32, TpUint64, TpInt64:
+		return readInt(handle, kind, endian)
 	case TpMatch:
 		matchStr, err := ResultMustBe[StringResult](kind.Params[0])
 		if err != nil {
@@ -114,6 +115,48 @@ func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (a
 		}
 
 		return items, nil
+	case TpStruct:
+		structRef, err := ResultMustBe[StructResult](kind.Params[0])
+		if err != nil {
+			return nil, err
+		}
+
+		endian, err := GetEndian(structRef.Modifiers, false)
+		if err != nil {
+			return nil, fmt.Errorf("struct %s modifier: %w", structRef.Name, err)
+		}
+
+		items := []DefinitionItem{}
+
+		for _, field := range structRef.Fields {
+			kind, err := ResultMustBe[TypeResult](field.Value)
+			if err != nil {
+				return nil, fmt.Errorf("%s > %s: %s\n", structRef.Name, field.Name, err)
+			}
+
+			fieldEndian, err := GetEndian(field.Modifiers, false)
+			if err != nil {
+				return nil, fmt.Errorf("%s > %s modifier: %w", structRef.Name, field.Name, err)
+			}
+
+			if fieldEndian == nil {
+				fieldEndian = endian
+			}
+
+			name, err := GetMapKey[StringResult](field.Modifiers, "name", false)
+			if err != nil {
+				return nil, fmt.Errorf("%s > %s modifier: %w", structRef.Name, field.Name, err)
+			}
+
+			data, err := readType(handle, kind, fieldEndian)
+			if err != nil {
+				return nil, fmt.Errorf("%s > %s: %w", structRef.Name, field.Name, err)
+			}
+
+			items = append(items, DefinitionItem{Id: field.Name, Name: string(name), Value: data})
+		}
+
+		return items, nil
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", kind.Name)
 	}
@@ -142,12 +185,24 @@ func GetEndian(mapping map[string]Result, required bool) (binary.ByteOrder, erro
 	return endian, nil
 }
 
-func ParseFromReader(handle io.ReadSeeker, definition []Result) error {
+type DefinitionItem struct {
+	Id    string
+	Name  string
+	Value any
+}
+
+type ParsedDefinition struct {
+	Meta
+	Items []DefinitionItem
+}
+
+func ParseFromReader(handle io.ReadSeeker, definition []Result) (*ParsedDefinition, error) {
 	if _, err := handle.Seek(0, 0); err != nil {
-		return err
+		return nil, err
 	}
 
 	var root *StructResult
+	var meta *MetaResult
 
 	for _, stmt := range definition {
 		if structure, ok := stmt.(StructResult); ok {
@@ -157,45 +212,35 @@ func ParseFromReader(handle io.ReadSeeker, definition []Result) error {
 			}
 
 			if isRoot, ok := isRootValue.(BooleanResult); !ok {
-				return fmt.Errorf("in struct %s: root modifier must be boolean", structure.Name)
+				return nil, fmt.Errorf("in struct %s: root modifier must be boolean", structure.Name)
 			} else if isRoot {
 				root = &structure
 				break
 			}
 		}
+
+		if metadata, ok := stmt.(MetaResult); ok && meta == nil {
+			meta = &metadata
+		}
 	}
 
 	if root == nil {
-		return fmt.Errorf("no root structure was declared")
+		return nil, fmt.Errorf("no root structure was declared")
 	}
 
-	endian, err := GetEndian(root.Modifiers, true)
+	if meta == nil {
+		return nil, fmt.Errorf("no metadata block was declared")
+	}
+
+	rootEndian, err := GetEndian(root.Modifiers, true)
 	if err != nil {
-		return fmt.Errorf("struct %s modifier: %w", root.Name, err)
+		return nil, fmt.Errorf("%s modifier: %w", root.Name, err)
 	}
 
-	for _, field := range root.Fields {
-		kind, err := ResultMustBe[TypeResult](field.Value)
-		if err != nil {
-			return fmt.Errorf("%s > %s: %s\n", root.Name, field.Name, err)
-		}
-
-		fieldEndian, err := GetEndian(field.Modifiers, false)
-		if err != nil {
-			return fmt.Errorf("%s > %s modifier: %w\n", root.Name, field.Name, err)
-		}
-
-		if fieldEndian != nil {
-			fieldEndian = endian
-		}
-
-		data, err := readType(handle, kind, fieldEndian)
-		if err != nil {
-			return fmt.Errorf("%s > %s: %w", root.Name, field.Name, err)
-		}
-
-		fmt.Printf("%s: %v\n", field.Name, data)
+	items, err := readType(handle, TypeResult{Name: TpStruct, Params: []Result{*root}}, rootEndian)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return &ParsedDefinition{Meta: Meta(*meta), Items: items.([]DefinitionItem)}, nil
 }

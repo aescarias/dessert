@@ -8,33 +8,26 @@ import (
 type TypeName string
 
 const (
-	// Unsigned Integer types
+	TpUint8   TypeName = "uint8"   // Unsigned 8-bit integer
+	TpUint16  TypeName = "uint16"  // Unsigned 16-bit integer
+	TpUint32  TypeName = "uint32"  // Unsigned 32-bit integer
+	TpUint64  TypeName = "uint64"  // Unsigned 64-bit integer
+	TpInt8    TypeName = "int8"    // Signed 8-bit integer
+	TpInt16   TypeName = "int16"   // Signed 16-bit integer
+	TpInt32   TypeName = "int32"   // Signed 32-bit integer
+	TpInt64   TypeName = "int64"   // Signed 64-bit integer
+	TpFloat32 TypeName = "float32" // "Single-precision" 32-bit floating point number
+	TpFloat64 TypeName = "float64" // "Double-precision" 64-bit floating point number
+	TpByte    TypeName = "byte"    // A single byte. Distinct from uint8 since it is intended for character sequences.
 
-	TpUint8  TypeName = "uint8"
-	TpUint16 TypeName = "uint16"
-	TpUint32 TypeName = "uint32"
-	TpUint64 TypeName = "uint64"
+	// The following are special types (their type name cannot be used in a document).
 
-	// Signed integer types
-
-	TpInt8  TypeName = "int8"
-	TpInt16 TypeName = "int16"
-	TpInt32 TypeName = "int32"
-	TpInt64 TypeName = "int64"
-
-	// Float types
-
-	TpFloat32 TypeName = "float32"
-	TpFloat64 TypeName = "float64"
-
-	// Other types
-
-	TpByte  TypeName = "byte"
-	TpArray TypeName = "array"
-	TpMatch TypeName = "match"
+	TpArray  TypeName = "array"  // Sequence of N items of type X - type[n].
+	TpMatch  TypeName = "match"  // Exact byte string match - "string".
+	TpStruct TypeName = "struct" // Struct referenced by identifier.
 )
 
-var AvailableTypes = []TypeName{
+var AvailableTypeNames = []TypeName{
 	TpUint8,
 	TpUint16,
 	TpUint32,
@@ -46,8 +39,6 @@ var AvailableTypes = []TypeName{
 	TpFloat32,
 	TpFloat64,
 	TpByte,
-	TpMatch,
-	TpArray,
 }
 
 type Runtime struct {
@@ -63,7 +54,7 @@ func NewRuntime() Runtime {
 }
 
 func (r *Runtime) addTypes() {
-	for _, typeName := range AvailableTypes {
+	for _, typeName := range AvailableTypeNames {
 		r.Environment[string(typeName)] = TypeResult{
 			Name:   typeName,
 			Params: nil,
@@ -445,29 +436,25 @@ func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
 			return nil, fmt.Errorf("mapping %v does not have key %v", res, param)
 		}
 	case TypeResult:
-		switch res.Name {
-		case TpByte:
-			byteLen, isInteger := param.(IntResult)
-			if !isInteger {
-				return nil, fmt.Errorf("byte length [%v] must be integer", param)
-			}
-
-			return TypeResult{Name: TpByte, Params: []Result{byteLen}}, nil
-		case TpMatch:
-			matchStr, isStr := param.(StringResult)
-			if !isStr {
-				return nil, fmt.Errorf("match parameter [%v] must be string", param)
-			}
-
-			return TypeResult{Name: TpMatch, Params: []Result{matchStr}}, nil
-		default:
-			arrayLen, isInteger := param.(IntResult)
-			if !isInteger {
-				return nil, fmt.Errorf("array length [%v] must be integer", param)
-			}
-
-			return TypeResult{Name: TpArray, Params: []Result{res, arrayLen}}, nil
+		arrayLen, isInteger := param.(IntResult)
+		if !isInteger {
+			return nil, fmt.Errorf("array length [%v] must be integer", param)
 		}
+
+		return TypeResult{Name: TpArray, Params: []Result{res, arrayLen}}, nil
+	case StructResult:
+		arrayLen, isInteger := param.(IntResult)
+		if !isInteger {
+			return nil, fmt.Errorf("array length [%v] must be integer", param)
+		}
+
+		return TypeResult{
+			Name: TpArray,
+			Params: []Result{
+				TypeResult{Name: TpStruct, Params: []Result{res}},
+				arrayLen,
+			},
+		}, nil
 	default:
 		return nil, fmt.Errorf("subscript is not supported for object of type %v", expr.Kind())
 	}
@@ -546,6 +533,7 @@ func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 	}
 
 	fields := []StructField{}
+
 	for _, field := range stmt.Fields {
 		fieldVal, err := r.EvaluateExpr(field.Value)
 		if err != nil {
@@ -563,6 +551,8 @@ func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 			fieldItem = item
 		case StringResult:
 			fieldItem = TypeResult{Name: TpMatch, Params: []Result{item}}
+		case StructResult:
+			fieldItem = TypeResult{Name: TpStruct, Params: []Result{item}}
 		default:
 			return nil, fmt.Errorf("%v > %s: %v is not allowed in this context", stmt.Name, field.Name, fieldVal)
 		}
