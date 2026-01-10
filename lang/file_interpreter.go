@@ -243,7 +243,7 @@ type DefinitionItem struct {
 }
 
 type ParsedDefinition struct {
-	Meta
+	Metadata
 	Items []DefinitionItem
 }
 
@@ -293,5 +293,5 @@ func ParseFromReader(handle io.ReadSeeker, definition []Result) (*ParsedDefiniti
 		return nil, err
 	}
 
-	return &ParsedDefinition{Meta: Meta(*meta), Items: items.([]DefinitionItem)}, nil
+	return &ParsedDefinition{Metadata: Metadata(*meta), Items: items.([]DefinitionItem)}, nil
 }

@@ -35,7 +35,6 @@ func PrintDefinition(items []lang.DefinitionItem, indent int) {
 			fmt.Printf("%s%s: %v\n", tab(indent), label, it.Value)
 		}
 	}
-
 }
 
 // ShowSyntaxTree prints the abstract syntax tree (AST) defined by node starting at the
