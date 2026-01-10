@@ -2,43 +2,49 @@ package main
 
 import (
 	"fmt"
-	"strconv"
+	"os"
 	"strings"
 
 	"github.com/aescarias/dessert/lang"
 )
 
-// PrintDefinition prints out a list of items representing the parsed contents of a definition.
-func PrintDefinition(items []lang.DefinitionItem, indent int) {
-	tab := func(n int) string { return strings.Repeat(" ", indent) }
+type AstCmd struct {
+	Input string `arg:"" help:"Filepath of the definition to parse."`
+}
 
-	for _, it := range items {
-		label := it.Name
-		if label == "" {
-			label = it.Id
-		}
+func (a *AstCmd) Run() error {
+	contents, err := os.ReadFile(a.Input)
+	if err != nil {
+		return err
+	}
 
-		if byteStr, ok := it.Value.([]byte); ok {
-			fmt.Printf("%s%s: %q\n", tab(indent), label, byteStr)
-		} else if children, ok := it.Value.([]lang.DefinitionItem); ok {
-			fmt.Printf("%s%s:\n", tab(indent), label)
-			PrintDefinition(children, indent+2)
-		} else if arr, ok := it.Value.([]any); ok {
-			children := []lang.DefinitionItem{}
-			for idx, child := range arr {
-				children = append(children, lang.DefinitionItem{Id: strconv.Itoa(idx), Value: child})
-			}
+	ShowAST(a.Input, contents)
+	return nil
+}
 
-			fmt.Printf("%s%s (%d):\n", tab(indent), label, len(children))
-			PrintDefinition(children, indent+2)
-		} else {
-			fmt.Printf("%s%s: %v\n", tab(indent), label, it.Value)
-		}
+// ShowAST takes a filename and the contents of the definition file and prints
+// an abstract syntax tree from the parsed statements.
+func ShowAST(filename string, contents []byte) {
+	lx := lang.NewLexer(contents)
+	if err := lx.Process(); err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	ps := lang.NewParser(lx.Tokens)
+	statements, err := ps.Parse()
+	if err != nil {
+		lang.ReportError(filename, contents, err)
+		os.Exit(ExitFailure)
+	}
+
+	for _, stmt := range statements {
+		ShowSyntaxTree(stmt, 0)
 	}
 }
 
-// ShowSyntaxTree prints the abstract syntax tree (AST) defined by node starting at the
-// specified indent level.
+// ShowSyntaxTree prints the abstract syntax tree (AST) defined by node starting
+// at the specified indent level.
 func ShowSyntaxTree(node lang.Node, indent int) {
 	tab := func(n int) string { return strings.Repeat(" ", n) }
 
