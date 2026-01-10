@@ -1,4 +1,4 @@
-module github.com/aescarias/dessert
+module github.com/aescarias/dessert/cmd
 
 go 1.25.5
 
