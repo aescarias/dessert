@@ -445,7 +445,12 @@ func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
 			return nil, fmt.Errorf("array length [%v] must be integer", param)
 		}
 
-		return TypeResult{Name: TpArray, Params: []Result{res, arrayLen}}, nil
+		switch res.Name {
+		case TpByte:
+			return TypeResult{Name: TpByte, Params: []Result{arrayLen}}, nil
+		default:
+			return TypeResult{Name: TpArray, Params: []Result{res, arrayLen}}, nil
+		}
 	case StructResult:
 		arrayLen, isInteger := param.(IntResult)
 		if !isInteger {
