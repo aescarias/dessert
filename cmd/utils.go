@@ -2,10 +2,41 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aescarias/dessert/lang"
 )
+
+// PrintDefinition prints out a list of items representing the parsed contents of a definition.
+func PrintDefinition(items []lang.DefinitionItem, indent int) {
+	tab := func(n int) string { return strings.Repeat(" ", indent) }
+
+	for _, it := range items {
+		label := it.Name
+		if label == "" {
+			label = it.Id
+		}
+
+		if byteStr, ok := it.Value.([]byte); ok {
+			fmt.Printf("%s%s: %q\n", tab(indent), label, byteStr)
+		} else if children, ok := it.Value.([]lang.DefinitionItem); ok {
+			fmt.Printf("%s%s:\n", tab(indent), label)
+			PrintDefinition(children, indent+2)
+		} else if arr, ok := it.Value.([]any); ok {
+			children := []lang.DefinitionItem{}
+			for idx, child := range arr {
+				children = append(children, lang.DefinitionItem{Id: strconv.Itoa(idx), Value: child})
+			}
+
+			fmt.Printf("%s%s (%d):\n", tab(indent), label, len(children))
+			PrintDefinition(children, indent+2)
+		} else {
+			fmt.Printf("%s%s: %v\n", tab(indent), label, it.Value)
+		}
+	}
+
+}
 
 // ShowSyntaxTree prints the abstract syntax tree (AST) defined by node starting at the
 // specified indent level.

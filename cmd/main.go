@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/aescarias/dessert/lang"
@@ -14,35 +13,6 @@ const (
 	ExitFailure int = 1
 	ExitUsage   int = 2
 )
-
-func printDefinition(items []lang.DefinitionItem, indent int) {
-	tab := func(n int) string { return strings.Repeat(" ", indent) }
-
-	for _, it := range items {
-		label := it.Name
-		if label == "" {
-			label = it.Id
-		}
-
-		if byteStr, ok := it.Value.([]byte); ok {
-			fmt.Printf("%s%s: %q\n", tab(indent), label, byteStr)
-		} else if children, ok := it.Value.([]lang.DefinitionItem); ok {
-			fmt.Printf("%s%s:\n", tab(indent), label)
-			printDefinition(children, indent+2)
-		} else if arr, ok := it.Value.([]any); ok {
-			children := []lang.DefinitionItem{}
-			for idx, child := range arr {
-				children = append(children, lang.DefinitionItem{Id: strconv.Itoa(idx), Value: child})
-			}
-
-			fmt.Printf("%s%s (%d):\n", tab(indent), label, len(children))
-			printDefinition(children, indent+2)
-		} else {
-			fmt.Printf("%s%s: %v\n", tab(indent), label, it.Value)
-		}
-	}
-
-}
 
 func ParseFileWithDefinition(inputHandle *os.File, defPath string, defContents []byte) {
 	lx := lang.NewLexer(defContents)
@@ -85,7 +55,7 @@ func ParseFileWithDefinition(inputHandle *os.File, defPath string, defContents [
 
 	fmt.Printf("---\n")
 
-	printDefinition(def.Items, 0)
+	PrintDefinition(def.Items, 0)
 }
 
 func ShowAST(filename string, contents []byte) {
@@ -107,7 +77,7 @@ func ShowAST(filename string, contents []byte) {
 	}
 }
 
-func ShowEvalBlocks(filename string, contents []byte) {
+func ShowStatements(filename string, contents []byte) {
 	lx := lang.NewLexer(contents)
 	if err := lx.Process(); err != nil {
 		lang.ReportError(filename, contents, err)
@@ -121,15 +91,15 @@ func ShowEvalBlocks(filename string, contents []byte) {
 		os.Exit(ExitFailure)
 	}
 
-	eval := lang.NewRuntime()
-	results, err := eval.Run(statements)
+	rt := lang.NewRuntime()
+	results, err := rt.Run(statements)
 	if err != nil {
 		lang.ReportError(filename, contents, err)
 		os.Exit(ExitFailure)
 	}
 
-	for _, result := range results {
-		fmt.Printf("%#v\n", result)
+	for _, res := range results {
+		fmt.Printf("%#v\n", res)
 	}
 }
 
@@ -140,14 +110,13 @@ func main() {
 	}
 
 	switch command := os.Args[1]; command {
-	case "debug":
-		if len(os.Args) < 4 {
-			fmt.Println("usage: dessert debug [process] [definition file]")
+	case "ast":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: dessert ast [filename]")
 			os.Exit(ExitUsage)
 		}
 
-		process := os.Args[2]
-		filename := os.Args[3]
+		filename := os.Args[2]
 
 		contents, err := os.ReadFile(filename)
 		if err != nil {
@@ -155,16 +124,22 @@ func main() {
 			os.Exit(ExitFailure)
 		}
 
-		switch process {
-		case "ast":
-			ShowAST(filename, contents)
-		case "eval":
-			ShowEvalBlocks(filename, contents)
-		default:
-			fmt.Printf("unknown process %q for command debug\n", process)
-			fmt.Printf("processes: ast, eval\n")
+		ShowAST(filename, contents)
+	case "results":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: dessert results [filename]")
 			os.Exit(ExitUsage)
 		}
+
+		filename := os.Args[2]
+
+		contents, err := os.ReadFile(filename)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(ExitFailure)
+		}
+
+		ShowStatements(filename, contents)
 	case "parse":
 		if len(os.Args) < 4 {
 			fmt.Println("usage: dessert parse [input file] [definition file]")
@@ -189,7 +164,7 @@ func main() {
 		ParseFileWithDefinition(inputHandle, defPath, defContents)
 	default:
 		fmt.Printf("unknown command %q\n", command)
-		fmt.Printf("commands: debug, parse\n")
+		fmt.Printf("commands: ast, parse\n")
 		os.Exit(ExitUsage)
 	}
 }
