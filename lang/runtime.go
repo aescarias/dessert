@@ -58,13 +58,36 @@ func NewMetadata(meta map[string]Result) (*Metadata, error) {
 	}, nil
 }
 
+type Environment struct {
+	Values map[string]Result
+	Parent *Environment
+}
+
+func (e *Environment) Set(name string, value Result) {
+	e.Values[name] = value
+}
+
+func (e *Environment) Get(name string) (Result, bool) {
+	if res, ok := e.Values[name]; ok {
+		return res, true
+	} else if e.Parent != nil {
+		return e.Parent.Get(name)
+	} else {
+		return nil, false
+	}
+}
+
+func NewEnvironment() *Environment {
+	return &Environment{Values: map[string]Result{}, Parent: nil}
+}
+
 type Runtime struct {
-	Globals  map[string]Result
+	Globals  *Environment
 	Metadata Metadata
 }
 
 func NewRuntime() *Runtime {
-	runtime := &Runtime{Globals: map[string]Result{}}
+	runtime := &Runtime{Globals: NewEnvironment()}
 	runtime.addTypes()
 
 	return runtime
@@ -72,10 +95,10 @@ func NewRuntime() *Runtime {
 
 func (r *Runtime) addTypes() {
 	for _, typeName := range AvailableTypeNames {
-		r.Globals[string(typeName)] = TypeResult{
-			Name:   typeName,
-			Params: nil,
-		}
+		r.Globals.Set(
+			string(typeName),
+			TypeResult{Name: typeName, Params: nil},
+		)
 	}
 }
 
@@ -188,8 +211,8 @@ func (r *Runtime) EvaluateLiteral(lit LiteralNode) (Result, error) {
 	case TokenString:
 		return StringResult(tok.Value), nil
 	case TokenIdentifier:
-		if global, ok := r.Globals[tok.Value]; ok {
-			return global, nil
+		if value, ok := r.Globals.Get(tok.Value); ok {
+			return value, nil
 		} else {
 			return nil, LangError{
 				ErrorAccess,
@@ -409,33 +432,22 @@ func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 	fields := []StructField{}
 
 	for _, field := range stmt.Fields {
-		fieldVal, err := r.EvaluateExpr(field.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%v > %s: %w", stmt.Name, field.Name, err)
-		}
-
 		fieldMod, err := r.EvaluateModifierList(field.Modifiers)
 		if err != nil {
 			return nil, fmt.Errorf("%v > modifiers for %s: %w", stmt.Name, field.Name, err)
 		}
 
-		var fieldItem Result
-		switch item := fieldVal.(type) {
-		case TypeResult:
-			fieldItem = item
-		case StringResult:
-			fieldItem = TypeResult{Name: TpMatch, Params: []Result{item}}
-		case StructResult:
-			fieldItem = TypeResult{Name: TpStruct, Params: []Result{item}}
-		default:
-			return nil, fmt.Errorf("%v > %s: %v is not allowed in this context", stmt.Name, field.Name, fieldVal)
-		}
-
-		fields = append(fields, StructField{Name: field.Name, Value: fieldItem, Modifiers: fieldMod})
+		fields = append(fields, StructField{
+			Name:      field.Name,
+			Expr:      field.Value,
+			Modifiers: fieldMod,
+		})
 	}
 
-	r.Globals[stmt.Name] = StructResult{Name: stmt.Name, Fields: fields, Modifiers: modifiers}
-	return r.Globals[stmt.Name], nil
+	structure := StructResult{Name: stmt.Name, Fields: fields, Modifiers: modifiers}
+	r.Globals.Set(stmt.Name, structure)
+
+	return structure, nil
 }
 
 func (r *Runtime) EvaluateStmt(stmt Node) (Result, error) {

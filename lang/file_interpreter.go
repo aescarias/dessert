@@ -4,7 +4,43 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/big"
 )
+
+func nativeToResult(native any) Result {
+	switch nt := native.(type) {
+	case uint8:
+		return IntResult{new(big.Int).SetUint64(uint64(nt))}
+	case uint16:
+		return IntResult{new(big.Int).SetUint64(uint64(nt))}
+	case uint32:
+		return IntResult{new(big.Int).SetUint64(uint64(nt))}
+	case uint64:
+		return IntResult{new(big.Int).SetUint64(nt)}
+	case int8:
+		return IntResult{new(big.Int).SetInt64(int64(nt))}
+	case int16:
+		return IntResult{new(big.Int).SetInt64(int64(nt))}
+	case int32:
+		return IntResult{new(big.Int).SetInt64(int64(nt))}
+	case int64:
+		return IntResult{new(big.Int).SetInt64(nt)}
+	case float32:
+		return FloatResult{new(big.Float).SetFloat64(float64(nt))}
+	case float64:
+		return FloatResult{new(big.Float).SetFloat64(nt)}
+	case []byte:
+		return StringResult(nt)
+	case []any:
+		items := ListResult{}
+		for _, item := range nt {
+			items = append(items, nativeToResult(item))
+		}
+		return items
+	default:
+		panic(fmt.Sprintf("could not convert native type %v to internal representation", native))
+	}
+}
 
 func readNumeric(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (any, error) {
 	switch kind.Name {
@@ -178,11 +214,24 @@ func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (a
 		}
 
 		items := []DefinitionItem{}
+		runtime := NewRuntime()
 
 		for _, field := range structRef.Fields {
-			kind, err := ResultMustBe[TypeResult](field.Value)
+			expr, err := runtime.EvaluateExpr(field.Expr)
 			if err != nil {
-				return nil, fmt.Errorf("%s > %s: %s\n", structRef.Name, field.Name, err)
+				return nil, fmt.Errorf("%s > %s: %w", structRef.Name, field.Name, err)
+			}
+
+			var tp TypeResult
+			switch expr.Kind() {
+			case ResString:
+				tp = TypeResult{Name: TpMatch, Params: []Result{expr}}
+			case ResStruct:
+				tp = TypeResult{Name: TpStruct, Params: []Result{expr}}
+			case ResType:
+				tp = expr.(TypeResult)
+			default:
+				return TypeResult{}, fmt.Errorf("%s > %s: expected type for field value, not %s", structRef.Name, field.Name, tp.Kind())
 			}
 
 			fieldEndian, err := GetEndian(field.Modifiers, false)
@@ -199,12 +248,14 @@ func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (a
 				return nil, fmt.Errorf("%s > %s modifier: %w", structRef.Name, field.Name, err)
 			}
 
-			data, err := readType(handle, kind, fieldEndian)
+			data, err := readType(handle, tp, fieldEndian)
 			if err != nil {
 				return nil, fmt.Errorf("%s > %s: %w", structRef.Name, field.Name, err)
 			}
 
 			items = append(items, DefinitionItem{Id: field.Name, Name: string(name), Value: data})
+
+			runtime.Globals.Set(field.Name, nativeToResult(data))
 		}
 
 		return items, nil

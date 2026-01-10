@@ -84,7 +84,7 @@ type StructResult struct {
 
 type StructField struct {
 	Name      string
-	Value     Result
+	Expr      Node
 	Modifiers map[string]Result
 }
 
