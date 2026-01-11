@@ -24,7 +24,14 @@ To build the Dessert CLI from source, you will need a copy of the [Go runtime](h
     cd dessert
     ```
 
-2. Build the `cli` module.
+2. Setup a Go workspace. This will allow you to use the Dessert library without having to `go get` it.
+
+    ```sh
+    go work init
+    go work use ./lang ./cli
+    ```
+
+3. Build the `cli` module (on Windows, `dessert` would instead be `dessert.exe`).
 
     ```sh
     go build -o dessert ./cli
