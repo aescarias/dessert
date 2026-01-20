@@ -142,3 +142,35 @@ func TestLexerUnterminated(t *testing.T) {
 		}
 	})
 }
+
+func TestLexerStatement(t *testing.T) {
+	input := "struct Point { x: uint8; y: uint8 }"
+	expected := []Token{
+		{Kind: TokenKeyword, Value: "struct"},
+		{Kind: TokenIdentifier, Value: "Point"},
+		{Kind: TokenLBrace, Value: "{"},
+		{Kind: TokenIdentifier, Value: "x"},
+		{Kind: TokenColon, Value: ":"},
+		{Kind: TokenIdentifier, Value: "uint8"},
+		{Kind: TokenSemicolon, Value: ";"},
+		{Kind: TokenIdentifier, Value: "y"},
+		{Kind: TokenColon, Value: ":"},
+		{Kind: TokenIdentifier, Value: "uint8"},
+		{Kind: TokenRBrace, Value: "}"},
+	}
+
+	lx := NewLexer([]byte(input))
+	if err := lx.Process(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(lx.Tokens) != len(expected) {
+		t.Errorf("expected %d tokens, got %d", len(expected), len(lx.Tokens))
+	}
+
+	for idx, got := range lx.Tokens {
+		if got.Kind != expected[idx].Kind || got.Value != expected[idx].Value {
+			t.Fatalf("token %d: expected %v, got %v", idx, expected, got)
+		}
+	}
+}
