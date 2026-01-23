@@ -22,6 +22,7 @@ const (
 
 	/* statements */
 	StmtExpr   NodeKind = "Expr"
+	StmtDecl   NodeKind = "Decl"
 	StmtMeta   NodeKind = "Meta"
 	StmtStruct NodeKind = "Struct"
 )
@@ -132,15 +133,17 @@ type MetaStmt struct {
 type StructStmt struct {
 	Name      string
 	Modifiers map[string]Node
-	Fields    []StructStmtField
+	Body      []Node
 	pos       Position
 }
 
-// A StructStmtField represents a field inside a "struct" statement.
-type StructStmtField struct {
-	Name      string
-	Value     Node
+// A DeclStmt represents a field declaration statement which declares a field
+// inside a structure.
+type DeclStmt struct {
+	Name      Token
+	Kind      Node
 	Modifiers map[string]Node
+	pos       Position
 }
 
 func (es *ExprStmt) Type() NodeKind     { return StmtExpr }
@@ -151,3 +154,6 @@ func (ms *MetaStmt) Position() Position { return ms.pos }
 
 func (ss *StructStmt) Type() NodeKind     { return StmtStruct }
 func (ss *StructStmt) Position() Position { return ss.pos }
+
+func (ds *DeclStmt) Type() NodeKind     { return StmtDecl }
+func (ds *DeclStmt) Position() Position { return ds.pos }

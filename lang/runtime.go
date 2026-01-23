@@ -431,17 +431,21 @@ func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 
 	fields := []StructField{}
 
-	for _, field := range stmt.Fields {
-		fieldMod, err := r.EvaluateModifierList(field.Modifiers)
-		if err != nil {
-			return nil, fmt.Errorf("%v > modifiers for %s: %w", stmt.Name, field.Name, err)
-		}
+	for idx, field := range stmt.Body {
+		if decl, ok := field.(*DeclStmt); ok {
+			fieldMod, err := r.EvaluateModifierList(decl.Modifiers)
+			if err != nil {
+				return nil, fmt.Errorf("%v > modifiers for %s: %w", stmt.Name, decl.Name.Value, err)
+			}
 
-		fields = append(fields, StructField{
-			Name:      field.Name,
-			Expr:      field.Value,
-			Modifiers: fieldMod,
-		})
+			fields = append(fields, StructField{
+				Name:      decl.Name.Value,
+				Expr:      decl.Kind,
+				Modifiers: fieldMod,
+			})
+		} else {
+			return nil, fmt.Errorf("%v: statement %d of type %s not currently supported", stmt.Name, idx+1, field.Type())
+		}
 	}
 
 	structure := StructResult{Name: stmt.Name, Fields: fields, Modifiers: modifiers}

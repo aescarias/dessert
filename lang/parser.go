@@ -507,41 +507,13 @@ func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, e
 
 	ps.Advance(1)
 
-	fields := []StructStmtField{}
+	block := []Node{}
 	for !ps.IsDone() && ps.Cursor().Kind != TokenRBrace {
-		modifiers, err := ps.ParseModifierList()
-		if errors.Is(err, ErrNotModifiers) {
-			modifiers = nil
-		} else if err != nil {
-			return nil, err
-		}
-
-		var fieldName Token
-		if ps.Cursor().Kind == TokenIdentifier {
-			fieldName = ps.Cursor()
-			ps.Advance(1)
-		} else {
-			return nil, LangError{ErrorSyntax, ps.Cursor().Position, "field name must be an identifier"}
-		}
-
-		if !ps.matchesToken(TokenColon) {
-			pos := Position{Start: fieldName.Position.End, End: fieldName.Position.End + 1}
-			return nil, LangError{ErrorSyntax, pos, "expected colon after struct field name"}
-		}
-		ps.Advance(1)
-
-		value, err := ps.ParseExpr()
+		stmt, err := ps.ParseStmt()
 		if err != nil {
 			return nil, err
 		}
-
-		if !ps.matchesToken(TokenSemicolon) {
-			pos := Position{Start: value.Position().End, End: value.Position().End + 1}
-			return nil, LangError{ErrorSyntax, pos, "field must end with semicolon"}
-		}
-		ps.Advance(1)
-
-		fields = append(fields, StructStmtField{Name: fieldName.Value, Value: value, Modifiers: modifiers})
+		block = append(block, stmt)
 	}
 
 	if ps.IsDone() {
@@ -564,7 +536,7 @@ func (ps *Parser) ParseStructStmt(start int, modifiers map[string]Node) (Node, e
 	}
 	ps.Advance(1)
 
-	return &StructStmt{Name: structName.Value, Modifiers: modifiers, Fields: fields, pos: Position{start, end}}, nil
+	return &StructStmt{Name: structName.Value, Modifiers: modifiers, Body: block, pos: Position{start, end}}, nil
 }
 
 func (ps *Parser) ParseExpr() (Node, error) {
@@ -587,6 +559,42 @@ func (ps *Parser) ParseExprStmt() (Node, error) {
 	ps.Advance(1)
 
 	return &ExprStmt{Expr: expr}, nil
+}
+
+var ErrNotDecl = fmt.Errorf("not the start of a declaration statement")
+
+func (ps *Parser) tryParseDeclaration(start int, modifiers map[string]Node) (Node, error) {
+	if ps.IsDone() || ps.Cursor().Kind != TokenIdentifier {
+		return nil, ErrNotDecl
+	}
+
+	startTok := ps.Position
+	name := ps.Cursor()
+	ps.Advance(1)
+
+	if !ps.matchesToken(TokenColon) {
+		ps.Position = startTok
+		return nil, ErrNotDecl
+	}
+	ps.Advance(1)
+
+	kind, err := ps.ParseExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	end := ps.Cursor().Position.End
+
+	if !ps.matchesToken(TokenSemicolon) {
+		return nil, LangError{
+			ErrorSyntax,
+			kind.Position(),
+			"expected semicolon",
+		}
+	}
+	ps.Advance(1)
+
+	return &DeclStmt{Name: name, Kind: kind, Modifiers: modifiers, pos: Position{start, end}}, nil
 }
 
 func (ps *Parser) ParseStmt() (Node, error) {
@@ -615,6 +623,14 @@ func (ps *Parser) ParseStmt() (Node, error) {
 				fmt.Sprintf("keyword %q was not expected at this point", ps.Cursor().Value),
 			}
 		}
+	case TokenIdentifier:
+		decl, err := ps.tryParseDeclaration(start, modifiers)
+		if errors.Is(err, ErrNotDecl) {
+			return ps.ParseExprStmt()
+		} else if err != nil {
+			return nil, err
+		}
+		return decl, nil
 	default:
 		return ps.ParseExprStmt()
 	}

@@ -113,14 +113,26 @@ func ShowSyntaxTree(node lang.Node, indent int) {
 		structStmt := node.(*lang.StructStmt)
 		fmt.Printf("%s> %s (%s)\n", tab(indent), structStmt.Type(), structStmt.Name)
 
-		fmt.Printf("%s- fields (%d)\n", tab(indent), len(structStmt.Fields))
-		for _, field := range structStmt.Fields {
-			fmt.Printf("%s- %s\n", tab(indent+2), field.Name)
-			ShowSyntaxTree(field.Value, indent+3)
+		fmt.Printf("%s* body (%d)\n", tab(indent+1), len(structStmt.Body))
+		for _, field := range structStmt.Body {
+			ShowSyntaxTree(field, indent+2)
 		}
 
-		fmt.Printf("%s- modifiers (%d)\n", tab(indent), len(structStmt.Modifiers))
+		fmt.Printf("%s* modifiers (%d)\n", tab(indent+1), len(structStmt.Modifiers))
 		for key, value := range structStmt.Modifiers {
+			fmt.Printf("%s- %s\n", tab(indent+2), key)
+			if value != nil {
+				ShowSyntaxTree(value, indent+3)
+			}
+		}
+	case lang.StmtDecl:
+		declStmt := node.(*lang.DeclStmt)
+		fmt.Printf("%s> %s (%s)\n", tab(indent), declStmt.Type(), declStmt.Name.Value)
+		fmt.Printf("%s* value\n", tab(indent+1))
+		ShowSyntaxTree(declStmt.Kind, indent+2)
+
+		fmt.Printf("%s* modifiers (%d)\n", tab(indent+1), len(declStmt.Modifiers))
+		for key, value := range declStmt.Modifiers {
 			fmt.Printf("%s- %s\n", tab(indent+2), key)
 			if value != nil {
 				ShowSyntaxTree(value, indent+3)
