@@ -1,0 +1,22 @@
+= Dessert Standard Library Reference
+Angel Carias <lotta.dev@outlook.com>
+2026-01-24
+:toc: auto
+:sectnums: |,all|
+
+== Functions
+
+=== `seek(offset, whence)`
+
+`seek` performs a seeking operation on the currently active file object.
+
+`offset` is an integer specifying the relative byte offset from which to seek.
+
+`whence` is a string specifying the position relative to which the byte offset will be calculated. `whence` must be either of the following strings:
+
+- `start` means the byte offset is relative to the start of the file.
+- `end` means the byte offset is relative to the end of the file.
+- `current` means the byte offset is relative to the current position within the file.
+
+`seek` returns an integer specifying the absolute byte offset (that is, relative to byte 0) from which the next byte will be read.
+
