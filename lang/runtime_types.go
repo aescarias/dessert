@@ -48,15 +48,17 @@ var AvailableTypeNames = []TypeName{
 type ResultKind string
 
 const (
-	ResBoolean ResultKind = "Boolean"
-	ResInteger ResultKind = "Integer"
-	ResFloat   ResultKind = "Float"
-	ResString  ResultKind = "String"
-	ResMap     ResultKind = "Map"
-	ResList    ResultKind = "List"
-	ResType    ResultKind = "Type"
-	ResMeta    ResultKind = "Meta"
-	ResStruct  ResultKind = "Struct"
+	ResBoolean  ResultKind = "Boolean"
+	ResInteger  ResultKind = "Integer"
+	ResFloat    ResultKind = "Float"
+	ResString   ResultKind = "String"
+	ResMap      ResultKind = "Map"
+	ResList     ResultKind = "List"
+	ResType     ResultKind = "Type"
+	ResMeta     ResultKind = "Meta"
+	ResStruct   ResultKind = "Struct"
+	ResField    ResultKind = "Field"
+	ResFunction ResultKind = "Function"
 )
 
 type Result interface {
@@ -73,18 +75,18 @@ type TypeResult struct {
 	Name   TypeName
 	Params []Result
 }
-
+type FuncResult func(r *Runtime, args []Result) (Result, error)
 type MetaResult Metadata
 
 type StructResult struct {
 	Name      string
-	Fields    []StructField
+	Body      []Node
 	Modifiers map[string]Result
 }
 
-type StructField struct {
+type StructFieldResult struct {
 	Name      string
-	Expr      Node
+	Value     Result
 	Modifiers map[string]Result
 }
 
@@ -95,9 +97,11 @@ func (sr StringResult) Kind() ResultKind  { return ResString }
 func (mr MapResult) Kind() ResultKind     { return ResMap }
 func (lr ListResult) Kind() ResultKind    { return ResList }
 func (tr TypeResult) Kind() ResultKind    { return ResType }
+func (fr FuncResult) Kind() ResultKind    { return ResFunction }
 
-func (mr MetaResult) Kind() ResultKind   { return ResMeta }
-func (sr StructResult) Kind() ResultKind { return ResStruct }
+func (mr MetaResult) Kind() ResultKind        { return ResMeta }
+func (sr StructResult) Kind() ResultKind      { return ResStruct }
+func (sf StructFieldResult) Kind() ResultKind { return ResField }
 
 func ResultMustBe[T Result](result Result) (T, error) {
 	var empty T

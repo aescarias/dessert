@@ -215,15 +215,21 @@ func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (a
 
 		items := []DefinitionItem{}
 		runtime := NewRuntime()
+		addStructBuiltins(runtime, handle)
 
-		for _, field := range structRef.Fields {
-			expr, err := runtime.EvaluateExpr(field.Expr)
+		for idx, field := range structRef.Body {
+			result, err := runtime.EvaluateStmt(field)
 			if err != nil {
-				return nil, fmt.Errorf("%s > %s: %w", structRef.Name, field.Name, err)
+				return nil, fmt.Errorf("%s > stmt %d: %w", structRef.Name, idx+1, err)
+			}
+
+			field, ok := result.(StructFieldResult)
+			if !ok {
+				continue
 			}
 
 			var tp TypeResult
-			switch expr.Kind() {
+			switch expr := field.Value; expr.Kind() {
 			case ResString:
 				tp = TypeResult{Name: TpMatch, Params: []Result{expr}}
 			case ResStruct:

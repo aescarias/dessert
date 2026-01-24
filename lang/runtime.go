@@ -357,6 +357,40 @@ func (r *Runtime) EvaluateSubscript(subscript SubscriptNode) (Result, error) {
 	}
 }
 
+func (r *Runtime) EvaluateCall(call CallNode) (Result, error) {
+	callable, err := r.EvaluateExpr(call.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	function, ok := callable.(FuncResult)
+	if !ok {
+		return nil, LangError{ErrorType, call.Expr.Position(), "object must be callable"}
+	}
+
+	arguments := []Result{}
+	for _, arg := range call.Arguments {
+		arg, err := r.EvaluateExpr(arg)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, arg)
+	}
+
+	res, err := function(r, arguments)
+	if lerr, ok := err.(*LangError); ok {
+		var empty Position
+		if lerr.Position == empty {
+			lerr.Position = call.Expr.Position()
+		}
+		return nil, lerr
+	} else if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 func (r *Runtime) EvaluateExpr(expr Node) (Result, error) {
 	switch expr.Type() {
 	case NodeBinOp:
@@ -371,6 +405,8 @@ func (r *Runtime) EvaluateExpr(expr Node) (Result, error) {
 		return r.EvaluateLiteral(*expr.(*LiteralNode))
 	case NodeSubscript:
 		return r.EvaluateSubscript(*expr.(*SubscriptNode))
+	case NodeCall:
+		return r.EvaluateCall(*expr.(*CallNode))
 	default:
 		return nil, LangError{
 			ErrorRuntime,
@@ -429,29 +465,25 @@ func (r *Runtime) EvaluateStructStmt(stmt StructStmt) (Result, error) {
 		return nil, err
 	}
 
-	fields := []StructField{}
-
-	for idx, field := range stmt.Body {
-		if decl, ok := field.(*DeclStmt); ok {
-			fieldMod, err := r.EvaluateModifierList(decl.Modifiers)
-			if err != nil {
-				return nil, fmt.Errorf("%v > modifiers for %s: %w", stmt.Name, decl.Name.Value, err)
-			}
-
-			fields = append(fields, StructField{
-				Name:      decl.Name.Value,
-				Expr:      decl.Kind,
-				Modifiers: fieldMod,
-			})
-		} else {
-			return nil, fmt.Errorf("%v: statement %d of type %s not currently supported", stmt.Name, idx+1, field.Type())
-		}
-	}
-
-	structure := StructResult{Name: stmt.Name, Fields: fields, Modifiers: modifiers}
+	structure := StructResult{Name: stmt.Name, Body: stmt.Body, Modifiers: modifiers}
 	r.Globals.Set(stmt.Name, structure)
 
 	return structure, nil
+}
+
+func (r *Runtime) EvaluateDeclStmt(stmt DeclStmt) (Result, error) {
+	modifiers, err := r.EvaluateModifierList(stmt.Modifiers)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := r.EvaluateExpr(stmt.Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	// r.Globals.Set(stmt.Name.Value, res)
+	return StructFieldResult{Name: stmt.Name.Value, Value: res, Modifiers: modifiers}, nil
 }
 
 func (r *Runtime) EvaluateStmt(stmt Node) (Result, error) {
@@ -462,6 +494,8 @@ func (r *Runtime) EvaluateStmt(stmt Node) (Result, error) {
 		return r.EvaluateMetaStmt(*stmt.(*MetaStmt))
 	case StmtStruct:
 		return r.EvaluateStructStmt(*stmt.(*StructStmt))
+	case StmtDecl:
+		return r.EvaluateDeclStmt(*stmt.(*DeclStmt))
 	default:
 		return nil, LangError{
 			ErrorRuntime,
