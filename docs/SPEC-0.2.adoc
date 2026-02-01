@@ -1,6 +1,6 @@
 = The Dessert Language Specification
 Angel Carias <lotta.dev@outlook.com>
-v0.2, 2026-01-24
+v0.2, 2026-02-01
 :toc: auto
 :sectnums: |,all|
 
@@ -330,12 +330,21 @@ The following binary operators are defined and grouped as follows:
     - Subtraction (-)
     - Multiplication (*)
     - Division (/)
+- Comparison operators
++
+    - Equal to (`==`) 
+    - Not equal to (`!=`)
+    - Less than (`<`)
+    - Less than or equal to (`<=`)
+    - Greater than (`>`) 
+    - Greater than or equal to (`>=`)
 
 [source,go]
 ----
-binary_op := arithmetic_op
+binary_op := arithmetic_op | comparison_op
 
 arithmetic_op := expr ("+" | "-" | "*" | "/") expr
+comparison_op := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
 ----
 
 ===== Arithmetic operators
@@ -390,6 +399,36 @@ The division operator `/` returns the quotient of numbers `a` and `b` given that
 3 / 0    // error: division by zero
 ----
 
+===== Comparison operators
+
+Comparison operators report whether an operand A is less than, greater than, or equal to an operand B.
+
+Equality operators report whether two operands `A` and `B` are distinct or equal to each other, as a boolean result.
+
+The equality operator `==` reports whether `A` and `B` are equal. The non-equality operator `!=` applies a negation to the result of `A == B`.
+
+For two operands A and B, equality is determined as follows:
+
+- For A and B, both integers or both floats, `A == B` reports true if the numeric value of A is equal to B. 
+- For a floating-point number A and an integer B, or vice versa, `A == B` reports true if the integer form of A (the float A truncated and converted to an integer) matches the numeric value of B.
+- For booleans A and B, `A == B` reports true if the boolean literals are the same.
+- For strings A and B, `A == B` reports true if the length of A matches the length of B and, for each byte A~n~ and B~n~, the byte value of A~n~ matches B~n~.
+- For lists A and B, `A == B` reports true if the length of A matches the length of B and, for each item A~n~ and B~n~, A~n~ is equal to B~n~.
+- For mappings A and B, `A == B` reports true if the length of A matches the length of B, and for each key of A, the key exists in B and the corresponding value for the key in A matches the corresponding value of such key in B. The order of the elements is not considered in this comparison.
+
+Except as noted above, for two operands A and B where the type of A does not match the type of B, `A == B` is false.
+
+For strings, lists, and mappings, `A == B` is false if the length of A does not equal the length of B, regardless of the contents of A and B. Likewise, `A == B` returns false if, for any element A~n~ and B~n~, A~n~ is not equal to B~n~, regardless of the remaining contents of A and B.
+
+The less than (`<`) operator reports whether operand A is less than operand B. The greater than (`>`) operator report whether operand A is greater than operand B. Their variants `<=` and `>=` introduce an equality component: `A <= B` is the same as `A < B || A == B` and `A >= B` is the same as `A > B || A == B`.
+
+For two operands A and B, `<` and `>` are defined as follows:
+
+- For A and B, both integers or floats, `A < B` is true if the numeric value of A is less than the numeric value of B. `A > B` is true if A is greater than B.
+- For a floating-point number A and an integer B, or vice versa, `A < B` is true if the integer form of A (the float A truncated and converted to an integer) is less than the numeric value of B. `A > B` is true if the integer form of A is greater than the numeric value of B.
+
+Less than and greater than operations are currently implemented for integers and floats only. Attempting to perform `<` or `>` with any other type shall raise a type error.
+
 === Operator Precedence
 
 From most to least precedence:
@@ -398,6 +437,7 @@ From most to least precedence:
 - Unary plus (`+x`), unary minus (`-x`), unary bitwise complement (`~x`).
 - Multiplication (`*`) and division (`/`)
 - Addition (`+`) and subtraction (`-`)
+- Equal to (`==`), not equal to (`!=`), less than (`<`), greater than (`>`), less than or equal to (`<=`), greater than or equal to (`>=`)
 
 === Function calls
 

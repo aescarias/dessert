@@ -1,10 +1,16 @@
 = Dessert Standard Library Reference
 Angel Carias <lotta.dev@outlook.com>
-2026-01-24
+v0.2, 2026-02-01
 :toc: auto
 :sectnums: |,all|
 
 == Functions
+
+=== `print(...args)`
+
+`print` outputs the values in `args` to standard output. In the final output, `args` is joined with spaces. A newline is inserted at the end of the output.
+
+`...args` means any amount of arguments. The arguments may be of any type.
 
 === `seek(offset, whence)`
 
