@@ -1,0 +1,28 @@
+meta {
+    dessert : "0.1",
+    name    : "Sun Au audio data",
+    exts    : [".snd", ".au"],
+    mime    : ["audio/basic"],
+    docs    : "Simple audio file format developed by Sun Microsystems."
+};
+
+@(root, endian: "big")
+struct SunAU {
+    @(name: "Magic")
+    magic: ".snd";
+
+    @(name: "Offset to data (bytes)")
+    offset_to_data: uint32;
+
+    @(name: "Data size (bytes)")
+    data_size: uint32;
+
+    @(name: "Encoding")
+    encoding: uint32;  // enum: https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/AU/AU.html
+    
+    @(name: "Samples per second (hz)")
+    samples_per_second: uint32;
+
+    @(name: "Number of channels")
+    channels: uint32;
+};

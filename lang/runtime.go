@@ -102,6 +102,101 @@ func (r *Runtime) addTypes() {
 	}
 }
 
+func (r *Runtime) doBinOpLt(left, right Result) (result BooleanResult, ok bool) {
+	switch {
+	case left.Kind() == ResInteger && right.Kind() == ResInteger:
+		cmp := left.(IntResult).Cmp(right.(IntResult).Int)
+		return BooleanResult(cmp < 0), true
+	case left.Kind() == ResFloat && right.Kind() == ResFloat:
+		cmp := left.(FloatResult).Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp < 0), true
+	case left.Kind() == ResInteger && right.Kind() == ResFloat:
+		leftFloat := new(big.Float).SetInt(left.(IntResult).Int)
+		cmp := leftFloat.Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp < 0), true
+	case left.Kind() == ResFloat && right.Kind() == ResInteger:
+		rightFloat := new(big.Float).SetInt(right.(IntResult).Int)
+		cmp := left.(FloatResult).Cmp(rightFloat)
+		return BooleanResult(cmp < 0), true
+	default:
+		return BooleanResult(false), false
+	}
+}
+
+func (r *Runtime) doBinOpGt(left, right Result) (result BooleanResult, ok bool) {
+	switch {
+	case left.Kind() == ResInteger && right.Kind() == ResInteger:
+		cmp := left.(IntResult).Cmp(right.(IntResult).Int)
+		return BooleanResult(cmp > 0), true
+	case left.Kind() == ResFloat && right.Kind() == ResFloat:
+		cmp := left.(FloatResult).Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp > 0), true
+	case left.Kind() == ResInteger && right.Kind() == ResFloat:
+		leftFloat := new(big.Float).SetInt(left.(IntResult).Int)
+		cmp := leftFloat.Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp > 0), true
+	case left.Kind() == ResFloat && right.Kind() == ResInteger:
+		rightFloat := new(big.Float).SetInt(right.(IntResult).Int)
+		cmp := left.(FloatResult).Cmp(rightFloat)
+		return BooleanResult(cmp > 0), true
+	default:
+		return BooleanResult(false), false
+	}
+}
+
+func (r *Runtime) doBinOpEquals(left, right Result) BooleanResult {
+	switch {
+	case left.Kind() == ResInteger && right.Kind() == ResInteger:
+		cmp := left.(IntResult).Cmp(right.(IntResult).Int)
+		return BooleanResult(cmp == 0)
+	case left.Kind() == ResFloat && right.Kind() == ResFloat:
+		cmp := left.(FloatResult).Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp == 0)
+	case left.Kind() == ResInteger && right.Kind() == ResFloat:
+		leftFloat := new(big.Float).SetInt(left.(IntResult).Int)
+		cmp := leftFloat.Cmp(right.(FloatResult).Float)
+		return BooleanResult(cmp == 0)
+	case left.Kind() == ResFloat && right.Kind() == ResInteger:
+		rightFloat := new(big.Float).SetInt(right.(IntResult).Int)
+		cmp := left.(FloatResult).Cmp(rightFloat)
+		return BooleanResult(cmp == 0)
+	case left.Kind() == ResString && right.Kind() == ResString:
+		return BooleanResult(left.(StringResult) == right.(StringResult))
+	case left.Kind() == ResBoolean && right.Kind() == ResBoolean:
+		return BooleanResult(left.(BooleanResult) == right.(BooleanResult))
+	case left.Kind() == ResList && right.Kind() == ResList:
+		leftList, rightList := left.(ListResult), right.(ListResult)
+
+		if len(leftList) != len(rightList) {
+			return BooleanResult(false)
+		}
+
+		for i := range leftList {
+			if !r.doBinOpEquals(leftList[i], rightList[i]) {
+				return BooleanResult(false)
+			}
+		}
+
+		return BooleanResult(true)
+	case left.Kind() == ResMap && right.Kind() == ResMap:
+		leftMap, rightMap := left.(MapResult), right.(MapResult)
+
+		if len(leftMap) != len(rightMap) {
+			return BooleanResult(false)
+		}
+
+		for key, leftVal := range leftMap {
+			if rightVal, ok := rightMap[key]; !ok || !bool(r.doBinOpEquals(leftVal, rightVal)) {
+				return BooleanResult(false)
+			}
+		}
+
+		return BooleanResult(true)
+	default:
+		return BooleanResult(false)
+	}
+}
+
 func (r *Runtime) EvaluateBinOp(node BinOpNode) (Result, error) {
 	left, err := r.EvaluateExpr(node.Left)
 	if err != nil {
@@ -176,6 +271,34 @@ func (r *Runtime) EvaluateBinOp(node BinOpNode) (Result, error) {
 		case left.Kind() == ResFloat && right.Kind() == ResInteger:
 			rightFloat := new(big.Float).SetInt(right.(IntResult).Int)
 			return FloatResult{new(big.Float).Quo(left.(FloatResult).Float, rightFloat)}, nil
+		}
+	case TokenEquals:
+		return r.doBinOpEquals(left, right), nil
+	case TokenNotEq:
+		return !r.doBinOpEquals(left, right), nil
+	case TokenLt:
+		res, ok := r.doBinOpLt(left, right)
+		if ok {
+			return res, nil
+		}
+	case TokenGt:
+		res, ok := r.doBinOpGt(left, right)
+		if ok {
+			return res, nil
+		}
+	case TokenLtEq:
+		lt, ok := r.doBinOpLt(left, right)
+		if ok && bool(lt) {
+			return lt, nil
+		} else if ok {
+			return r.doBinOpEquals(left, right), nil
+		}
+	case TokenGtEq:
+		gt, ok := r.doBinOpGt(left, right)
+		if ok && bool(gt) {
+			return gt, nil
+		} else if ok {
+			return r.doBinOpEquals(left, right), nil
 		}
 	}
 

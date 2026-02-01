@@ -3,11 +3,24 @@ package lang
 import (
 	"fmt"
 	"io"
-	"math/big"
+	"strings"
 )
 
 func doError(kind ErrorKind, message string, args ...any) LangError {
 	return LangError{Kind: kind, Message: fmt.Sprintf(message, args...)}
+}
+
+func printFn(w io.Writer) FuncResult {
+	return func(r *Runtime, args []Result) (Result, error) {
+		items := []string{}
+		for _, arg := range args {
+			items = append(items, fmt.Sprint(arg))
+		}
+
+		fmt.Fprintln(w, strings.Join(items, " "))
+
+		return nil, nil
+	}
 }
 
 func seekFn(fp io.ReadSeeker) FuncResult {
@@ -50,10 +63,12 @@ func seekFn(fp io.ReadSeeker) FuncResult {
 		}
 
 		value, _ := fp.Seek(offset.Int64(), whenceValue)
-		return IntResult{new(big.Int).SetInt64(value)}, nil
+
+		return NewIntResult(value), nil
 	}
 }
 
-func addStructBuiltins(r *Runtime, fp io.ReadSeeker) {
+func addStructBuiltins(r *Runtime, fp io.ReadSeeker, tw io.Writer) {
 	r.Globals.Set("seek", seekFn(fp))
+	r.Globals.Set("print", printFn(tw))
 }

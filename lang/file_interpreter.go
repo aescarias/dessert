@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
 )
 
 func nativeToResult(native any) Result {
@@ -215,7 +216,7 @@ func readType(handle io.ReadSeeker, kind TypeResult, endian binary.ByteOrder) (a
 
 		items := []DefinitionItem{}
 		runtime := NewRuntime()
-		addStructBuiltins(runtime, handle)
+		addStructBuiltins(runtime, handle, os.Stdout)
 
 		for idx, field := range structRef.Body {
 			result, err := runtime.EvaluateStmt(field)

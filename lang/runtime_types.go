@@ -90,6 +90,14 @@ type StructFieldResult struct {
 	Modifiers map[string]Result
 }
 
+func NewIntResult(x int64) IntResult {
+	return IntResult{big.NewInt(x)}
+}
+
+func NewFloatResult(x float64) FloatResult {
+	return FloatResult{big.NewFloat(x)}
+}
+
 func (br BooleanResult) Kind() ResultKind { return ResBoolean }
 func (ir IntResult) Kind() ResultKind     { return ResInteger }
 func (fr FloatResult) Kind() ResultKind   { return ResFloat }
@@ -143,4 +151,28 @@ func GetMapKey[T Result](mapping map[string]Result, name string, required bool) 
 	}
 
 	return value, nil
+}
+
+// ResultIsTruthy reports whether value is considered truthy. A result is considered
+// truthy by default. A result is falsy if
+//   - the result is the literal boolean false
+//   - the result is the integer or float 0.
+//   - the result is a string, map, or list of length 0.
+func ResultIsTruthy(value Result) bool {
+	switch res := value.(type) {
+	case BooleanResult:
+		return bool(res)
+	case IntResult:
+		return res.Cmp(big.NewInt(0)) != 0
+	case FloatResult:
+		return res.Cmp(big.NewFloat(0)) != 0
+	case StringResult:
+		return len(res) > 0
+	case ListResult:
+		return len(res) > 0
+	case MapResult:
+		return len(res) > 0
+	default:
+		return true
+	}
 }
